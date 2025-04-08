@@ -1,0 +1,57 @@
+.inventory_layout{
+    margin: 10px;
+    box-shadow: 0 0 4px 2px rgba(0,0,0,0.2);
+}
+
+.plus_icon{
+    align-self: center;
+}
+.category_cell{
+    display: flex;
+    column-gap: 10px;
+}
+.search_filter_layout{
+    margin:5px;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5); 
+    justify-content: center;
+    align-items: center;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .modal_content {
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    min-width: 300px;
+    max-width: 100%;
+    max-height:80%;
+    overflow: auto;
+  }
+
+  .modal_item{
+    display:flex;
+    align-items: center;
+    overflow: auto;
+    padding:5px;
+    column-gap: 20px;
+    width: 100%;
+  }
+
+  .modal_item_label{
+    flex:1;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .modal_item_input{
+    flex:2
+  }

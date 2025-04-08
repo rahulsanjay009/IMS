@@ -1,0 +1,60 @@
+from .models import Order, OrderItem, Product
+from django.db.models import Sum
+
+def normalize(type,data):
+    result_data = []
+    if(type == 'products'):        
+        for product in data:
+                result_data.append({
+                    'id': str(product.id),  # Convert UUID to string to ensure it's serializable
+                    'name': product.name,
+                    'description': product.description,
+                    'price': str(product.price),  # Convert Decimal to string to avoid issues
+                    'total_qty': product.total_qty,
+                    'category': product.category.name if product.category else 'No category',  # Handle missing category
+                })
+    elif type == 'categories':
+         for category in data:
+              result_data.append(category.name)
+    elif type=='orders':
+         for order in data:
+              result_data.append({
+                    'order_number':str(order.number),
+                    'customer_name': order.customer.full_name if order.customer else 'null',
+                    'customer_phone': order.customer.phone if order.customer else 'null', 
+                    'is_paid': order.is_paid,
+                    'from_date':order.date_from,
+                    'to_date':order.date_to
+              })
+    return result_data
+
+
+def get_products_with_available_quantity(date_from, date_to):
+    # Step 1: Get all products
+    all_products = Product.objects.all()
+
+    # Step 2: Filter orders within the date range and aggregate ordered quantities for each product
+    orders_in_range = Order.objects.filter(date_from__lte=date_to, date_to__gte=date_from)
+    order_items = OrderItem.objects.filter(order__in=orders_in_range)
+    
+    ordered_quantities = order_items.values('product') \
+        .annotate(total_ordered_qty=Sum('ordered_qty')) \
+        .values('product', 'total_ordered_qty')
+
+    # Create a dictionary to store the total ordered quantities for each product
+    ordered_qty_dict = {item['product']: item['total_ordered_qty'] for item in ordered_quantities}
+
+    # Step 3: Calculate available quantity for each product
+    products_with_available_quantity = []
+    for product in all_products:
+        # Get the ordered quantity for this product from the dictionary (default to 0 if not found)
+        total_ordered_qty = ordered_qty_dict.get(product.id, 0)
+        available_qty = product.total_qty - total_ordered_qty
+        
+        # Append product info with available quantity
+        products_with_available_quantity.append({
+            'product_id': product.id,
+            'available_qty': available_qty
+        })
+    
+    return products_with_available_quantity

@@ -90,13 +90,11 @@ const AddOrder = () => {
             setQuantity('');             // Reset quantity
         }
         else{
-            setErrorMessage('Order Not Added!!!!');
+            setErrorMessage(data.error);
         }
-        console.log(data)
         
     }).catch((err)=>console.log(err))
-    setTimeout(()=>setErrorMessage(''),3000);
-    
+    setTimeout(()=>setErrorMessage(''),3000);    
   };
 
   // Form items configuration (customer email is optional)

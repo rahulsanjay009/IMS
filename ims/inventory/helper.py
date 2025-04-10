@@ -77,9 +77,16 @@ def get_products_with_available_quantity(date_from, date_to):
     return products_with_available_quantity
 
 
+import time
+import hashlib
+
 def generate_order_number(phone, name):
     timestamp = str(int(time.time()))  
     source_str = f"{phone}_{name}_{timestamp}"
     hash_obj = hashlib.sha256(source_str.encode())
     hash_int = int(hash_obj.hexdigest(), 16)
-    return hash_int % 10_000_000_000  
+    
+    # Ensure the number is 10 digits
+    order_number = hash_int % 10_000_000_000
+    return str(order_number).zfill(10)  # Pad with leading zeros if needed
+

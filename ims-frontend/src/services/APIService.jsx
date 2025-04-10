@@ -67,6 +67,17 @@ const APIService = () => {
         const url = 'http://localhost:8000/inventory/update_order'
         return await makeRequest(url,'POST',order)
       }
+
+      const editProduct = async (product) => {
+        const url = 'http://localhost:8000/inventory/edit_product'
+        return await makeRequest(url, 'POST',product)
+      }
+
+      const deleteProduct = async (product_id) => {
+        const url = 'http://localhost:8000/inventory/delete_product'
+        return await makeRequest(url, 'POST',{product_id})
+      }
+      
       return {
               fetchProducts, 
               saveProduct, 
@@ -75,7 +86,9 @@ const APIService = () => {
               saveOrder,
               fetchOrders,
               fetchAvailability,
-              saveOrderToDB
+              saveOrderToDB,
+              editProduct,
+              deleteProduct
             }
 }
 

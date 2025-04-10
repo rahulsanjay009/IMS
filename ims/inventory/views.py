@@ -1,6 +1,6 @@
 from .models import Product, Category, Customer, OrderItem , Order
 from django.http import JsonResponse
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from rest_framework.decorators import api_view
 from .helper import normalize, get_products_with_available_quantity, generate_order_number
@@ -18,7 +18,7 @@ def add_category(request):
         category.save()
         return JsonResponse({"success":True,'message':'Category added successfully'},status=201)
     except Exception as e:
-        return JsonResponse({"success":False,'error':str(e)},status=500)
+        return JsonResponse({"success":False,'error':str(e)},status=200)
 @api_view(['POST'])
 def add_product(request):
     try:
@@ -53,7 +53,7 @@ def add_product(request):
 
         return JsonResponse({"success": True, 'message': 'Product added successfully!'}, status=201)
     except Exception as e:
-        return JsonResponse({"success": False, 'error': str(e)}, status=500)
+        return JsonResponse({"success": False, 'error': str(e)}, status=200)
 
 @api_view(['GET'])
 def product_list(request):
@@ -64,7 +64,7 @@ def product_list(request):
         # Return the list of products as a JSON response
         return JsonResponse({"success":True,'products': product_data}, status=200)
     except Exception as e:
-        return JsonResponse({"success":False,'error':str(e)},status = 500)
+        return JsonResponse({"success":False,'error':str(e)},status = 200)
     
 
 @api_view(['POST'])
@@ -82,10 +82,10 @@ def create_category(request):
             return JsonResponse({"success":False, "error": "Category with this name already exists."}, status=200)
         else:
             # Handle any other integrity errors (not related to unique constraint)
-            return JsonResponse({"success":False,"error": "An error occurred while creating the category."}, status=500)
+            return JsonResponse({"success":False,"error": "An error occurred while creating the category."}, status=200)
     except Exception as e:
         print(e)
-        return JsonResponse({"success":False,'error':str(e)},status = 500)
+        return JsonResponse({"success":False,'error':str(e)},status = 200)
 
 @api_view(['GET']) 
 def get_categories(request):
@@ -94,8 +94,8 @@ def get_categories(request):
         categories = normalize('categories',result_set)
         return JsonResponse({"success":True,"categories":categories},status = 200)
     except Exception as e:
-        return JsonResponse({"success":False,'error':str(e)},status = 500)
-    
+        return JsonResponse({"success":False,'error':str(e)},status = 200)
+
 
 @api_view(['POST'])
 def add_order(request):
@@ -110,7 +110,7 @@ def add_order(request):
         is_paid = data.get("paid").lower() == "true"  # Convert to boolean
         products_data = data.get("products", [])
         is_returned = False
-        comments = data.get("comments",None)
+        comments = data.get("comments", None)
 
         # Step 1: Check if customer exists by phone number
         customer, created = Customer.objects.get_or_create(
@@ -126,67 +126,73 @@ def add_order(request):
             customer_email = customer_email
             customer.save()
 
-
         # Step 2: Create Order
-        # Parse the dates from the request (ensure correct format)
         try:
             date_from = datetime.strptime(from_date, "%Y-%m-%d %H:%M:%S")
             date_to = datetime.strptime(to_date, "%Y-%m-%d %H:%M:%S")
         except ValueError as e:
-            return JsonResponse({"success": False, "error": f"Invalid date format: {str(e)}"}, status=400)
+            return JsonResponse({"success": False, "error": f"Invalid date format: {str(e)}"}, status=200)
         
         # Generate unique order number (you can also create a custom way of generating order number)
         order_number = generate_order_number(customer_phone, customer_name)
         
-        order = Order.objects.create(
-            number=order_number,
-            date_from=date_from,
-            date_to=date_to,
-            is_paid=is_paid,
-            customer=customer,
-            comments = comments,
-            is_returned = False
-        )
-        
-        # Step 3: Create OrderItems for each product
-        for product_data in products_data:            
-            product_id = product_data.get("product_id",None)
-            quantity = int(product_data.get("quantity"))            
-
-            # Retrieve the product (assuming the name is unique, if not, you may need another way to identify products)
-            try:
-                product = Product.objects.get(id=product_id)
-            except Product.DoesNotExist:
-                return JsonResponse({"success": False, "error": f"Product '{product_id}' not found."}, status=400)
-            
-            # Calculate the total ordered quantity for this product in the date range
-            overlapping_orders = OrderItem.objects.filter(
-                product=product,
-                order__date_from__lte=date_to,  
-                order__date_to__gte=date_from   
+        # Start the atomic transaction to ensure atomicity
+        with transaction.atomic():
+            # Create the order object within the atomic block
+            order = Order.objects.create(
+                number=order_number,
+                date_from=date_from,
+                date_to=date_to,
+                is_paid=is_paid,
+                customer=customer,
+                comments=comments,
+                is_returned=is_returned
             )
-
-            # Calculate the sum of ordered quantities for overlapping orders
-            ordered_qty_in_range = overlapping_orders.aggregate(Sum('ordered_qty'))['ordered_qty__sum'] or 0
             
-            # Available quantity is the total quantity minus the ordered quantity
-            available_qty = product.total_qty - ordered_qty_in_range
+            # Step 3: Create OrderItems for each product
+            for product_data in products_data:            
+                product_id = product_data.get("product_id", None)
+                quantity = int(product_data.get("quantity"))            
 
-            # If the ordered quantity exceeds the available quantity, return an error
-            if available_qty < quantity:
-                return JsonResponse({"success": False, "error": f"Not enough stock for product '{product_name}'."}, status=400)
+                # Retrieve the product (assuming the name is unique, if not, you may need another way to identify products)
+                try:
+                    product = Product.objects.get(id=product_id)
+                except Product.DoesNotExist:
+                    # Rollback the transaction if product is not found
+                    transaction.set_rollback(True)
+                    return JsonResponse({"success": False, "error": f"Product '{product_id}' not found."}, status=200)
+                
+                # Calculate the total ordered quantity for this product in the date range
+                overlapping_orders = OrderItem.objects.filter(
+                    product=product,
+                    order__date_from__lte=date_to,  
+                    order__date_to__gte=date_from   
+                )
 
-            # Create the OrderItem
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                ordered_qty=quantity
-            )
+                # Calculate the sum of ordered quantities for overlapping orders
+                ordered_qty_in_range = overlapping_orders.aggregate(Sum('ordered_qty'))['ordered_qty__sum'] or 0
+                
+                # Available quantity is the total quantity minus the ordered quantity
+                available_qty = product.total_qty - ordered_qty_in_range
+
+                # If the ordered quantity exceeds the available quantity, return an error
+                if available_qty < quantity:
+                    # Rollback the transaction if there is insufficient stock
+                    transaction.set_rollback(True)
+                    return JsonResponse({"success": False, "error": f"Not enough stock for product '{product.name}'."}, status=200)
+
+                # Create the OrderItem
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    ordered_qty=quantity
+                )
 
         return JsonResponse({"success": True, "message": "Order has been placed successfully!"}, status=200)
 
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        # Any exception will trigger a rollback and return an error
+        return JsonResponse({"success": False, "error": str(e)}, status=200)
 
 
 @api_view(['GET'])
@@ -196,7 +202,7 @@ def get_orders(request):
         order_list = normalize('orders',result_set)
         return JsonResponse({"success":True,"orders":order_list},status = 200)
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return JsonResponse({"success": False, "error": str(e)}, status=200)
     
 
 @api_view(['POST'])
@@ -218,7 +224,7 @@ def check_product_availability(request):
 
         return JsonResponse({'success':True, 'availableProducts': result_data},status = 200)
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return JsonResponse({"success": False, "error": str(e)}, status=200)
     
 
 @api_view(['POST'])
@@ -269,5 +275,65 @@ def update_order_items(request):
 
         return JsonResponse({"success": True, "message": "Order items updated successfully!"}, status=200)
 
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=200)
+
+
+@api_view(['POST'])
+def edit_product(request):
+    try:
+        data = json.loads(request.body)
+        product_id = data.get("id", None)
+        name = data.get('name', None)
+        description = data.get('description', None)
+        price = data.get('price', None)
+        total_qty = data.get('total_qty', None)
+        category_text = data.get('category', None)
+
+        # Validate required fields
+        if not product_id or not name or not price or total_qty is None or not category_text:
+            return JsonResponse({"success": False, "error": "Missing required fields"}, status=400)
+
+        # Fetch the product
+        product = get_object_or_404(Product, id=product_id)
+
+        # Update the fields
+        product.name = name
+        product.description = description
+        product.price = price
+        product.total_qty = total_qty
+
+        # Retrieve the category based on the category name
+        try:
+            category = Category.objects.get(name__icontains=category_text)
+            product.category = category
+        except Category.DoesNotExist:
+            return JsonResponse({"success": False, "error": "Category not found"}, status=200)
+
+        # Save the updated product
+        product.save()
+
+        return JsonResponse({"success": True, "message": "Product updated successfully"}, status=200)
+    
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=200)
+
+
+@api_view(['POST'])
+def delete_product(request):
+    try:
+        data = json.loads(request.body)
+        product_id = data.get("product_id", None)
+        
+        # Ensure the product_id is provided
+        if not product_id:
+            return JsonResponse({"success": False, "error": "Product ID is required"}, status=400)
+        
+        # Fetch the product and delete it
+        product = get_object_or_404(Product, id=product_id)
+        product.delete()
+        
+        return JsonResponse({"success": True, "message": "Product deleted successfully"}, status=200)
+    
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)

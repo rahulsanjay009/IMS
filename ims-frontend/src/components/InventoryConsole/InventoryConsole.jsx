@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import styles from './InventoryConsole.module.css'
 import AddIcon from '@mui/icons-material/Add';
-import {TableCell, TableContainer, TableHead, TableRow, Paper, Table, TableBody, Button} from '@mui/material';
+import {TableCell, TableContainer, TableHead, TableRow, Paper, Table, TableBody, Button, TextField} from '@mui/material';
 import APIService from '../../services/APIService';
 import SearchFilterAddInventory from './SearchFilterAddInventory';
 import AddProductModal from './AddProductModal';
 
 const InventoryConsole = () => {
-
+    const [editingProduct, setEditingProduct] = useState(null);
     const [products, setProducts] = useState([]);
     const [showAddProductModal,setShowAddProductModal] = useState(false)
     const [showAddCategory,setShowAddCategory] = useState(false);
@@ -38,6 +38,41 @@ const InventoryConsole = () => {
             console.log(res)
         }).catch((err) => console.log(err))
     }
+
+    // Edit product handler
+    const handleEditProduct = (product) => {
+        setEditingProduct({ ...product }); // Set the current product as the editing state
+    };
+    
+    // Save edited product
+    const saveEditedProduct = (updatedProduct) => {
+        console.log(updatedProduct)
+        APIService().editProduct(updatedProduct).then((res) => {
+        if (res.success) {
+            console.log(res)
+            const updatedProducts = products.map((product) =>
+            product.id === updatedProduct.id ? updatedProduct : product
+            );
+            setProducts(updatedProducts);
+            setEditingProduct(null); // Close the edit mode
+        } else {
+            console.log(res.error);
+        }
+        }).catch((err) => console.log(err));
+    };
+    
+    // Delete product handler
+    const handleDeleteProduct = (productId) => {
+        APIService().deleteProduct(productId).then((res) => {
+        if (res.success) {
+            // Remove the deleted product from the list
+            setProducts((prevProducts) => prevProducts.filter((product) => product.id !== productId));
+        } else {
+            console.log('Failed to delete product');
+        }
+        }).catch((err) => console.log(err));
+    };
+  
     return (
         <div className=''>
             <SearchFilterAddInventory addProductModal={addProductModal} retrieveAvailability={retrieveAvailability}/>
@@ -71,17 +106,66 @@ const InventoryConsole = () => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {products?.map((item,idx)=>(
-                                <TableRow>
-                                    <TableCell> {idx + 1} </TableCell>
-                                    <TableCell> {item?.name} </TableCell>
-                                    <TableCell> {item?.category} </TableCell>
-                                    <TableCell> {item?.price} </TableCell>
-                                    <TableCell> {item?.total_qty} </TableCell>
-                                    <TableCell> { item?.available_qty  || 0} </TableCell>
+                            {products?.map((item, idx) => (
+                                <TableRow key={item.id}>
+                                <TableCell> {idx + 1} </TableCell>
+                                <TableCell>
+                                    {editingProduct?.id === item.id ? (
+                                    <TextField
+                                        value={editingProduct?.name}
+                                        onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                                    />
+                                    ) : (
+                                    item.name
+                                    )}
+                                </TableCell>
+                                <TableCell>
+                                    {editingProduct?.id === item.id ? (
+                                    <TextField
+                                        value={editingProduct?.category}
+                                        onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
+                                    />
+                                    ) : (
+                                    item.category
+                                    )}
+                                </TableCell>
+                                <TableCell>
+                                    {editingProduct?.id === item.id ? (
+                                    <TextField
+                                        value={editingProduct?.price}
+                                        onChange={(e) => setEditingProduct({ ...editingProduct, price: e.target.value })}
+                                    />
+                                    ) : (
+                                    item.price
+                                    )}
+                                </TableCell>
+                                <TableCell>
+                                    {editingProduct?.id === item.id ? (
+                                    <TextField
+                                        value={editingProduct?.total_qty}
+                                        onChange={(e) => setEditingProduct({ ...editingProduct, total_qty: e.target.value })}
+                                    />
+                                    ) : (
+                                    item.total_qty
+                                    )}
+                                </TableCell>
+                                <TableCell>
+                                    {
+                                        item.available_qty
+                                    }
+                                </TableCell>
+                                <TableCell>
+                                    {editingProduct?.id === item.id ? (
+                                    <Button onClick={() => saveEditedProduct(editingProduct)}>Save</Button>
+                                    ) : (
+                                    <Button onClick={() => handleEditProduct(item)}>Edit</Button>
+                                    )}
+                                    <Button onClick={() => handleDeleteProduct(item.id)}>Delete</Button>
+                                </TableCell>
                                 </TableRow>
                             ))}
-                        </TableBody>
+                            </TableBody>
+
                     </Table>
                 </TableContainer>
             </div>

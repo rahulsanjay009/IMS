@@ -28,4 +28,6 @@ urlpatterns = [
     path('inventory/orders',views.get_orders, name='get_orders'),
     path('inventory/check_product_availability',views.check_product_availability, name='check_product_availability'),
     path('inventory/update_order',views.update_order_items, name='update_order_items'),
+    path('inventory/edit_product',views.edit_product, name='edit_product'),
+    path('inventory/delete_product',views.delete_product, name='delete_product'),
 ]

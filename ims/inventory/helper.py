@@ -1,5 +1,8 @@
 from .models import Order, OrderItem, Product
 from django.db.models import Sum
+import hashlib
+import time
+
 
 def normalize(type,data):
     result_data = []
@@ -16,16 +19,30 @@ def normalize(type,data):
     elif type == 'categories':
          for category in data:
               result_data.append(category.name)
-    elif type=='orders':
-         for order in data:
-              result_data.append({
-                    'order_number':str(order.number),
+    elif type == 'orders':
+        for order in data:
+            if order.is_returned is False:
+                # Get order items
+                items = []
+                for item in order.items.all():
+                    items.append({
+                        'product_name': item.product.name,
+                        'quantity': item.ordered_qty,
+                        'price': str(item.product.price),
+                        'product_id': str(item.product.id),
+                    })
+
+                result_data.append({
+                    'order_id': str(order.id),
+                    'order_number': str(order.number),
                     'customer_name': order.customer.full_name if order.customer else 'null',
-                    'customer_phone': order.customer.phone if order.customer else 'null', 
+                    'customer_phone': order.customer.phone if order.customer else 'null',
                     'is_paid': order.is_paid,
-                    'from_date':order.date_from,
-                    'to_date':order.date_to
-              })
+                    'from_date': order.date_from,
+                    'to_date': order.date_to,
+                    'comments': order.comments,
+                    'items': items  # <- Add items inside the order
+                })
     return result_data
 
 
@@ -34,7 +51,7 @@ def get_products_with_available_quantity(date_from, date_to):
     all_products = Product.objects.all()
 
     # Step 2: Filter orders within the date range and aggregate ordered quantities for each product
-    orders_in_range = Order.objects.filter(date_from__lte=date_to, date_to__gte=date_from)
+    orders_in_range = Order.objects.filter(date_from__lte=date_to, date_to__gte=date_from, is_returned = False)
     order_items = OrderItem.objects.filter(order__in=orders_in_range)
     
     ordered_quantities = order_items.values('product') \
@@ -58,3 +75,11 @@ def get_products_with_available_quantity(date_from, date_to):
         })
     
     return products_with_available_quantity
+
+
+def generate_order_number(phone, name):
+    timestamp = str(int(time.time()))  
+    source_str = f"{phone}_{name}_{timestamp}"
+    hash_obj = hashlib.sha256(source_str.encode())
+    hash_int = int(hash_obj.hexdigest(), 16)
+    return hash_int % 10_000_000_000  

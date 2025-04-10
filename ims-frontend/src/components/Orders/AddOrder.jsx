@@ -18,6 +18,7 @@ const AddOrder = () => {
         from_date: null,
         to_date: null,
         paid: '',
+        comments:''
       }
   const [order, setOrder] = useState(initialOrderState);
 
@@ -35,6 +36,9 @@ const AddOrder = () => {
     }).catch((err) => console.log(err));
   }, []);
 
+  useEffect(()=>{
+    console.log(order)
+  },[order])
   const addOrderData = (key, value) => {
     setOrder((prev) => ({
       ...prev,
@@ -44,7 +48,7 @@ const AddOrder = () => {
 
   const addProduct = () => {
     if (selectedProduct && quantity) {
-      const newProduct = { name: selectedProduct.name, quantity };
+      const newProduct = { name: selectedProduct?.name, product_id: selectedProduct?.id, quantity };
       setOrder((prev) => ({
         ...prev,
         products: [...prev.products, newProduct],
@@ -235,9 +239,21 @@ const AddOrder = () => {
             <FormControlLabel value="true" control={<Radio />} label="Yes" />
             <FormControlLabel value="false" control={<Radio />} label="No" />
           </RadioGroup>
+         
         </FormControl>
+        <TextField
+            fullWidth
+            variant="outlined"
+            label="Comments"
+            type="Text"
+            value={order["comments"]}
+            className={styles.add_order_textField}
+            onChange={(e) => addOrderData("comments", e.target.value)}
+          />
+
       </div>
 
+      
       {/* Submit Button */}
       <Button variant="contained" onClick={addOrder} className={styles.add_order_button}>
         Submit Order

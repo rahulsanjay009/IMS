@@ -56,6 +56,42 @@
     color: #333;
 }
 
+.text_nowrap{
+    text-wrap: nowrap;
+}
+
+.edit_save{
+    display: flex;
+    flex-direction: column;
+}
+
+.edit_icon{
+    margin:5px;
+    padding:3px;
+}
+
+.save_icon{
+    margin:5px;
+    padding:3px;
+    color: green;
+}
+
+.cancel_icon,.delete_icon{
+    margin:5px;
+    padding:3px;
+    color: tomato;
+    cursor: pointer;
+}
+.order_item{
+    display:'flex';
+    align-items: center;
+}
+
+.edit_icon:hover,.save_icon:hover,.cancel_icon:hover{
+    box-shadow: 0 0 4px 2px rgba(0,0,0,0.2);
+    cursor: pointer;
+    border-radius: 15px;
+}
 /* Media Queries for Responsiveness */
 @media (max-width: 768px) {
     .add_order_item {

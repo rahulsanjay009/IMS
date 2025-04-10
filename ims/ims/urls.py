@@ -27,4 +27,5 @@ urlpatterns = [
     path('inventory/create_order',views.add_order, name='add_order'),
     path('inventory/orders',views.get_orders, name='get_orders'),
     path('inventory/check_product_availability',views.check_product_availability, name='check_product_availability'),
+    path('inventory/update_order',views.update_order_items, name='update_order_items'),
 ]

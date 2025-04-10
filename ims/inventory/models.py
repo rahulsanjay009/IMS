@@ -14,7 +14,7 @@ class Category(models.Model):
     
 class Product(models.Model):
     id = models.UUIDField(primary_key = True, default = uuid.uuid4, editable = False)
-    name = models.CharField(max_length = 255)
+    name = models.CharField(max_length = 255, unique=True)
     description = models.TextField()
     price = models.DecimalField(max_digits = 5 , decimal_places = 2)
     total_qty = models.IntegerField()
@@ -40,7 +40,9 @@ class Order(models.Model):
     date_from = models.DateTimeField()
     date_to = models.DateTimeField()
     is_paid = models.BooleanField()
+    comments = models.TextField()
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
+    is_returned = models.BooleanField()
 
     def __str__(self):
         return str(self.number)

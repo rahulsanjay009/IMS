@@ -60,8 +60,12 @@ const APIService = () => {
 
       const fetchAvailability = async (from, to ) => {
         const url = 'http://localhost:8000/inventory/check_product_availability'
-        console.log({from,to})
-        return await makeRequest(url,'POST',{from,to});
+        return await makeRequest(url,'POST',{from,to})
+      }
+
+      const saveOrderToDB = async (order) => {
+        const url = 'http://localhost:8000/inventory/update_order'
+        return await makeRequest(url,'POST',order)
       }
       return {
               fetchProducts, 
@@ -70,7 +74,8 @@ const APIService = () => {
               fetchCategories,
               saveOrder,
               fetchOrders,
-              fetchAvailability
+              fetchAvailability,
+              saveOrderToDB
             }
 }
 

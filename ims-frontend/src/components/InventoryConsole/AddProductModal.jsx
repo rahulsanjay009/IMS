@@ -48,13 +48,16 @@ const AddProductModal = ({ type }) => {
         APIService().saveProduct(captureProduct).then((data) => {
             if (data?.success) {
                 setShowMsg('Product added successfully');
-                setTimeout(() => {
-                    setShowMsg('');
-                    setCaptureProduct({
-                        name: '', description: '', price: '', total_qty: '', category: ''
-                    });
-                }, 1000);
+                setCaptureProduct({
+                    name: '', description: '', price: '', total_qty: '', category: ''
+                });                
             }
+            else{
+                setShowMsg('Product with the name already exists!!!');
+            }
+            setTimeout(() => {
+                setShowMsg('');                    
+            }, 2000);
         }).catch((err) => console.log(err));
     };
 

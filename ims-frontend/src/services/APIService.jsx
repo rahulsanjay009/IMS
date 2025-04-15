@@ -1,6 +1,6 @@
 const APIService = () => {
-    const API_END_POINT = 'https://chinnisanjay2504.pythonanywhere.com'
-    // const API_END_POINT = 'http://localhost:8000'
+    //const API_END_POINT = 'https://chinnisanjay2504.pythonanywhere.com'
+    const API_END_POINT = 'http://localhost:8000'
     const makeRequest = async (url, method, body = null) => {
         // Set the headers for the request, assuming JSON data
         const headers = {

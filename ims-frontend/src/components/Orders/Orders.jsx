@@ -79,29 +79,34 @@ const Orders = () => {
     return new Date(date).toLocaleDateString('en-US', options);
   };
 
-  const computePivotTotals = () => {
-    const totals = {};
-    const allProducts = new Set();
+  const computePivotTableData = () => {
+    const groupedData = {};
   
     orders.forEach(order => {
       const dateKey = formatSummaryDate(order.from_date);
   
-      if (!totals[dateKey]) {
-        totals[dateKey] = {};
+      if (!groupedData[dateKey]) {
+        groupedData[dateKey] = [];
       }
   
-      order.items.forEach(item => {
-        allProducts.add(item.product_name);
-  
-        if (!totals[dateKey][item.product_name]) {
-          totals[dateKey][item.product_name] = 0;
-        }
-        totals[dateKey][item.product_name] += item.quantity;
+      groupedData[dateKey].push({
+        customer_name: order.customer_name,
+        order_number: order.order_number,
+        items: order.items
       });
     });
   
-    return { totals, productList: Array.from(allProducts) };
+    return groupedData;
   };
+  
+  const formatItemsRowWisePairs = (items, itemsPerRow = 6) => {
+    const rows = [];
+    for (let i = 0; i < items.length; i += itemsPerRow) {
+      rows.push(items.slice(i, i + itemsPerRow));
+    }
+    return rows;
+  };
+  
   
   
   const addProductToOrder = (product) => {
@@ -344,33 +349,40 @@ const Orders = () => {
         </Table>
       </TableContainer>      
         {/* Pivot Summary Table */}
-        <Box mt={2}>
-        <h3>Summary: Total Quantity of Products Sold by Date</h3>
-        <TableContainer component={Paper}>
-            <Table>
-            <TableHead>
-                <TableRow>
-                <TableCell>Date</TableCell>
-                {computePivotTotals().productList.map((product) => (
-                    <TableCell key={product}>{product}</TableCell>
+        <Box mt={4}>
+          <h3>Date-wise Order Summary with Customer Details</h3>
+          {Object.entries(computePivotTableData()).map(([date, ordersOnDate]) => (
+            <Box key={date} mb={3}>
+              <Paper elevation={3} sx={{ p: 2 }}>
+                <Box fontWeight="bold" mb={1}>📅 {date}</Box>
+                {ordersOnDate.map((order, idx) => (
+                  <Box key={idx} mb={2}>
+                    <Box fontWeight="medium" mb={1}>
+                      🧾 Order #: {order.order_number} | 👤 {order.customer_name}
+                    </Box>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableBody>
+                          {formatItemsRowWisePairs(order.items, 6).map((itemRow, rowIdx) => (
+                            <TableRow key={rowIdx}>
+                              {itemRow.map((item, colIdx) => (
+                                <TableCell key={colIdx}>
+                                  <Box fontWeight="bold">{item.product_name}</Box>
+                                  <Box>Qty: {item.quantity}</Box>
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
                 ))}
-                </TableRow>
-            </TableHead>
-            <TableBody>
-                {Object.entries(computePivotTotals().totals).map(([date, productTotals]) => (
-                <TableRow key={date}>
-                    <TableCell>{date}</TableCell>
-                    {computePivotTotals().productList.map((product) => (
-                    <TableCell key={product}>
-                        {productTotals[product] || '-'}
-                    </TableCell>
-                    ))}
-                </TableRow>
-                ))}
-            </TableBody>
-            </Table>
-        </TableContainer>
+              </Paper>
+            </Box>
+          ))}
         </Box>
+
 
 
     </div>

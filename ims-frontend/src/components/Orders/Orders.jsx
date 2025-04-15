@@ -1,4 +1,4 @@
-import { Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Box } from '@mui/material';
+import { Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Box, Snackbar } from '@mui/material';
 import styles from './Orders.module.css';
 import { useEffect, useState } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
@@ -12,11 +12,15 @@ import inventoryStyles from '../InventoryConsole/InventoryConsole.module.css';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
 const Orders = () => {
-  const [orders, setOrders] = useState([]);
-  const [showProductModal, setShowProductModal] = useState(false);
-  const [editable, setEditable] = useState([]);
-  const [currentOrderIdx, setCurrentOrderIdx] = useState(null);
-  const navigate = useNavigate();
+    const [orders, setOrders] = useState([]);
+    const [showProductModal, setShowProductModal] = useState(false);
+    const [editable, setEditable] = useState([]);
+    const [currentOrderIdx, setCurrentOrderIdx] = useState(null);
+    const [errorMsg,setErrorMsg] = useState('')
+    const navigate = useNavigate();
+    const [sendEmail,setSendEmail] = useState(false)
+    const [email,setEmail] = useState('')
+    const [flagOrderToEmail, setFlagOrderToEmail] = useState(null);
 
   useEffect(() => {
     fetchOrders();
@@ -48,7 +52,9 @@ const Orders = () => {
     const orderToSave = {
       id: orders[idx]?.order_id,
       items: orders[idx]?.items,
+      comments: orders[idx]?.comments
     };
+    console.log(orderToSave)
     APIService().saveOrderToDB(orderToSave).then((res) => {
       if (res?.success) {
         setEditable((prev) => {
@@ -56,12 +62,48 @@ const Orders = () => {
           updated[idx] = true;
           return updated;
         });
+        setErrorMsg('Updated Order Succesfully!')
       } else {
-        console.log("Save failed");
+        setErrorMsg(res?.error)
       }
     }).catch((err) => console.log(err));
+
   };
 
+  const formatSummaryDate = (date) => {
+    const options = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: '2-digit'
+    };
+    return new Date(date).toLocaleDateString('en-US', options);
+  };
+
+  const computePivotTotals = () => {
+    const totals = {};
+    const allProducts = new Set();
+  
+    orders.forEach(order => {
+      const dateKey = formatSummaryDate(order.from_date);
+  
+      if (!totals[dateKey]) {
+        totals[dateKey] = {};
+      }
+  
+      order.items.forEach(item => {
+        allProducts.add(item.product_name);
+  
+        if (!totals[dateKey][item.product_name]) {
+          totals[dateKey][item.product_name] = 0;
+        }
+        totals[dateKey][item.product_name] += item.quantity;
+      });
+    });
+  
+    return { totals, productList: Array.from(allProducts) };
+  };
+  
+  
   const addProductToOrder = (product) => {
     if (currentOrderIdx === null) return;
     setOrders((prevOrders) => {
@@ -79,10 +121,9 @@ const Orders = () => {
           price: product.price,
         });
       }
-
       return updatedOrders;
     });
-
+    handleEditToggle(currentOrderIdx, false)
     setShowProductModal(false);
     setCurrentOrderIdx(null);
   };
@@ -114,6 +155,39 @@ const Orders = () => {
     });
   };
 
+  const updateOrderComments = (idx, comments) => {
+    setOrders((prev) => {
+        const updatedOrders = [...prev]
+        updatedOrders[idx].comments = comments 
+        return updatedOrders
+    })
+  }
+
+  const sendConfirmation = () => {
+    if(email === ''||flagOrderToEmail===null)
+        return;
+
+    APIService().sendConfirmation(email, flagOrderToEmail).then((res)=>{
+        if(res.success){
+            setErrorMsg('Order Confirmation sent!!!')
+            setSendEmail(false)
+        }
+        else{
+            setErrorMsg(res.error)
+        }
+    }).catch((err)=>{console.log(err)})
+  }
+
+  const formatItemsRowWise = (items, numRows = 3) => {
+    const columns = Math.ceil(items.length / numRows);
+    const rows = Array.from({ length: numRows }, (_, i) =>
+      Array.from({ length: columns }, (_, j) => items[j * numRows + i]).filter(Boolean)
+    );
+    return rows;
+  };
+  
+  
+  
   return (
     <div className={styles.order_layout}>
       {showProductModal && (
@@ -121,21 +195,32 @@ const Orders = () => {
           <AddProductToOrder addProductToOrder={addProductToOrder} currentItems={orders[currentOrderIdx]?.items} />
         </div>
       )}
+
+    {sendEmail && (
+        <div className={inventoryStyles.modal} onClick={() => setSendEmail(false)}>
+            <div className={inventoryStyles.modal_content} onClick={(e) => e.stopPropagation()}>
+                <TextField type="email" onChange={(e)=>{setEmail(e.target.value)}} />
+                <Button onClick={sendConfirmation}>SEND</Button>
+            </div>
+        </div>
+      )}
       <Box mb={3}>
         <Button variant='contained' onClick={() => navigate('/addOrder')} startIcon={<AddCircleIcon />}>Add Order</Button>
       </Box>
 
+      <Snackbar
+        open={errorMsg!==''}
+        autoHideDuration={5000}
+        onClose={() => setErrorMsg('')}
+        message={errorMsg}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      />
       <TableContainer component={Paper} sx={{ overflowX: "auto" }}>
         <Table sx={{ minWidth: 650 }} aria-label="scrollable table">
           <TableHead>
             <TableRow className={styles.text_nowrap}>
-              <TableCell>Order ID</TableCell>
-              <TableCell>Customer Name</TableCell>
-              <TableCell>Customer Phone</TableCell>
-              <TableCell>Send Email</TableCell>
-              <TableCell>Pick up Date</TableCell>
-              <TableCell>Drop off Date</TableCell>
-              <TableCell>Payment Status</TableCell>
+              <TableCell>Order Details</TableCell>
+              <TableCell>Comments</TableCell>
               <TableCell>Items Ordered</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
@@ -143,15 +228,30 @@ const Orders = () => {
           <TableBody>
             {orders.map((order, idx) => (
               <TableRow key={order?.order_number}>
-                <TableCell>{order?.order_number}</TableCell>
-                <TableCell>{order?.customer_name}</TableCell>
-                <TableCell>{order?.customer_phone}</TableCell>
-                <TableCell><Button onClick={() => console.log(order?.order_number)}>Send Email</Button></TableCell>
-                <TableCell>{formatDate(order.from_date)}</TableCell>
-                <TableCell>{formatDate(order.to_date)}</TableCell>
+                <TableCell sx={{ minWidth: 250, maxWidth: 300, width: '25%' }}>
+                    <Box display="flex" flexDirection="column" alignItems="flex-start">
+                        <Box><strong>Order #:</strong> {order?.order_number}</Box>
+                        <Box><strong>Name:</strong> {order?.customer_name}</Box>
+                        <Box><strong>Phone:</strong> {order?.customer_phone}</Box>
+                        <Box><strong>Pick-up:</strong> {formatDate(order.from_date)}</Box>
+                        <Box><strong>Drop-off:</strong> {formatDate(order.to_date)}</Box>
+                        <Box><strong>Status:</strong> {order.is_paid ? 'Paid' : 'Not Paid'}</Box>
+                        <Button 
+                        size="small" 
+                        variant="outlined" 
+                        sx={{ mt: 1 }} 
+                        onClick={() => {
+                            setSendEmail(true);
+                            setFlagOrderToEmail(order?.order_id);
+                        }}
+                        >
+                        Send Email
+                        </Button>
+                    </Box>
+                    </TableCell>
+
                 <TableCell>
-                  {order.is_paid ? 'Paid' : 'Not Paid'}
-                  <TextField
+                    <TextField
                     value={order?.comments}
                     disabled={editable[idx]}
                     sx={{ width: '200px' }}
@@ -160,43 +260,48 @@ const Orders = () => {
                     multiline
                     rows={2}
                     margin="dense"
+                    onChange={(e) => updateOrderComments(idx, e.target.value)}
                   />
-                </TableCell>
+                </TableCell>                
                 <TableCell>
-                  {order?.items.length > 0 && (
-                    <TableContainer>
-                      <Table>
-                        <TableBody>
-                          <TableRow>
-                            {order.items.map((item) => (
-                              <TableCell key={item.product_id} className={styles.text_nowrap}>
-                                {item.product_name}
-                                <Box display="flex" gap={1}>
-                                  <input
-                                    type="number"
-                                    value={item.quantity}
-                                    disabled={editable[idx]}
-                                    style={{ width: '40px', margin: '0 8px' }}
-                                    onChange={(e) => updateOrder(idx, item?.product_id, parseInt(e.target.value))}
-                                  />
-                                  {!editable[idx] && (
-                                    <Button                                      
-                                      disableRipple
-                                      sx={{ all: 'unset', cursor:'pointer' }}
-                                      onClick={() => removeItemFromOrderAtIdx(idx, item.product_id)}
-                                    >
-                                      <DeleteOutlineIcon/>
-                                    </Button>
-                                  )}
-                                </Box>
-                              </TableCell>
+                    {order?.items.length > 0 && (
+                        <TableContainer>
+                        <Table size="small">
+                            <TableBody>
+                            {formatItemsRowWise(order.items, 3).map((rowItems, rowIdx) => (
+                                <TableRow key={rowIdx}>
+                                {rowItems.map((item) => (
+                                    <TableCell key={item.product_id} className={styles.text_nowrap}>
+                                    <Box fontWeight="bold">{item.product_name}</Box>
+                                    <Box display="flex" alignItems="center" gap={1}>
+                                        <input
+                                        type="number"
+                                        value={item.quantity}
+                                        disabled={editable[idx]}
+                                        style={{ width: '40px' }}
+                                        onChange={(e) => updateOrder(idx, item.product_id, parseInt(e.target.value))}
+                                        />
+                                        {!editable[idx] && (
+                                        <Button
+                                            disableRipple
+                                            sx={{ all: 'unset', cursor: 'pointer' }}
+                                            onClick={() => removeItemFromOrderAtIdx(idx, item.product_id)}
+                                        >
+                                            <DeleteOutlineIcon />
+                                        </Button>
+                                        )}
+                                    </Box>
+                                    </TableCell>
+                                ))}
+                                </TableRow>
                             ))}
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
+                            </TableBody>
+                        </Table>
+                        </TableContainer>
+                    )}
                 </TableCell>
+
+
                 <TableCell>
                   <Box display="flex" gap={1}>
                     <Button
@@ -237,7 +342,37 @@ const Orders = () => {
             ))}
           </TableBody>
         </Table>
-      </TableContainer>
+      </TableContainer>      
+        {/* Pivot Summary Table */}
+        <Box mt={2}>
+        <h3>Summary: Total Quantity of Products Sold by Date</h3>
+        <TableContainer component={Paper}>
+            <Table>
+            <TableHead>
+                <TableRow>
+                <TableCell>Date</TableCell>
+                {computePivotTotals().productList.map((product) => (
+                    <TableCell key={product}>{product}</TableCell>
+                ))}
+                </TableRow>
+            </TableHead>
+            <TableBody>
+                {Object.entries(computePivotTotals().totals).map(([date, productTotals]) => (
+                <TableRow key={date}>
+                    <TableCell>{date}</TableCell>
+                    {computePivotTotals().productList.map((product) => (
+                    <TableCell key={product}>
+                        {productTotals[product] || '-'}
+                    </TableCell>
+                    ))}
+                </TableRow>
+                ))}
+            </TableBody>
+            </Table>
+        </TableContainer>
+        </Box>
+
+
     </div>
   );
 };

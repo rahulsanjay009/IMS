@@ -1,5 +1,6 @@
 const APIService = () => {
-
+    const API_END_POINT = 'https://chinnisanjay2504.pythonanywhere.com'
+    // const API_END_POINT = 'http://localhost:8000'
     const makeRequest = async (url, method, body = null) => {
         // Set the headers for the request, assuming JSON data
         const headers = {
@@ -14,10 +15,8 @@ const APIService = () => {
         if (body) {
           options.body = JSON.stringify(body);
         }
-      
         try {
           const response = await fetch(url, options);
-      
           if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
           }
@@ -26,70 +25,77 @@ const APIService = () => {
         } catch (error) {
           return { success: false, error: error.message };
         }
-      };
-      
+      }
       const fetchProducts = async () => {
-        const url = 'http://localhost:8000/inventory/products'
+        const url = `${API_END_POINT}/inventory/products`
         return await makeRequest(url,'GET')
       }
 
       const saveProduct = async (product) => {
-        const url = 'http://localhost:8000/inventory/create_product'
+        const url = `${API_END_POINT}/inventory/create_product`
         return await makeRequest(url,'POST',product)
       }
 
       const saveCategory = async (category) => {
-        const url = 'http://localhost:8000/inventory/create_category'
+        const url = `${API_END_POINT}/inventory/create_category`
         return await makeRequest(url,'POST',{'category':category})
       }
 
       const fetchCategories = async () => {
-        const url = 'http://localhost:8000/inventory/categories'
+        const url = `${API_END_POINT}/inventory/categories`
         return await makeRequest(url,'GET')
       }
 
       const saveOrder = async (order) => {
-        const url = 'http://localhost:8000/inventory/create_order'
+        const url = `${API_END_POINT}/inventory/create_order`
         return await makeRequest(url,'POST',order)
       }
 
       const fetchOrders = async () => {
-        const url = 'http://localhost:8000/inventory/orders'
+        const url = `${API_END_POINT}/inventory/orders`
         return await makeRequest(url,'GET');
       }
 
       const fetchAvailability = async (from, to ) => {
-        const url = 'http://localhost:8000/inventory/check_product_availability'
+        const url = `${API_END_POINT}/inventory/check_product_availability`
         return await makeRequest(url,'POST',{from,to})
       }
 
       const saveOrderToDB = async (order) => {
-        const url = 'http://localhost:8000/inventory/update_order'
+        const url = `${API_END_POINT}/inventory/update_order`
         return await makeRequest(url,'POST',order)
       }
 
       const editProduct = async (product) => {
-        const url = 'http://localhost:8000/inventory/edit_product'
+        const url = `${API_END_POINT}/inventory/edit_product`
         return await makeRequest(url, 'POST',product)
       }
 
       const deleteProduct = async (product_id) => {
-        const url = 'http://localhost:8000/inventory/delete_product'
+        const url = `${API_END_POINT}/inventory/delete_product`
         return await makeRequest(url, 'POST',{product_id})
       }
       
-      return {
-              fetchProducts, 
-              saveProduct, 
-              saveCategory,
-              fetchCategories,
-              saveOrder,
-              fetchOrders,
-              fetchAvailability,
-              saveOrderToDB,
-              editProduct,
-              deleteProduct
-            }
+      const sendConfirmation = async (email, order_id) => {
+        const url = `${API_END_POINT}/inventory/send_order_confirmation`
+        return await makeRequest(url, 'POST',{order_id,email})       
+      }
+    
+
+    return {
+            fetchProducts, 
+            saveProduct, 
+            saveCategory,
+            fetchCategories,
+            saveOrder,
+            fetchOrders,
+            fetchAvailability,
+            saveOrderToDB,
+            editProduct,
+            deleteProduct,
+            sendConfirmation
+          }
+    
 }
 
 export default APIService;

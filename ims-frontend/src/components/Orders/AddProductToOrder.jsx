@@ -19,7 +19,7 @@ const AddProductToOrder = ({addProductToOrder, currentItems}) => {
     },[])
 
     const addProduct = () => {
-        const product = {product_name: selectedProduct?.name,product_id: selectedProduct?.id, quantity: quantity, price : parseInt(selectedProduct.price)}
+        const product = {product_name: selectedProduct?.name,product_id: selectedProduct?.id, quantity: parseInt(quantity), price : selectedProduct.price}
         addProductToOrder(product)
     }
     return (

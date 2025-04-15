@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TextField, Button, Autocomplete, Radio, RadioGroup, FormControlLabel, FormControl, Table, TableHead, TableRow, TableContainer, TableCell, TableBody } from '@mui/material';
+import { TextField, Button, Autocomplete, Radio, RadioGroup, FormControlLabel, FormControl, Table, TableHead, TableRow, TableContainer, TableCell, TableBody, Snackbar } from '@mui/material';
 import styles from './Orders.module.css';
 import APIService from '../../services/APIService';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -94,7 +94,6 @@ const AddOrder = () => {
         }
         
     }).catch((err)=>console.log(err))
-    setTimeout(()=>setErrorMessage(''),3000);    
   };
 
   // Form items configuration (customer email is optional)
@@ -106,8 +105,6 @@ const AddOrder = () => {
 
   return (
     <div className={styles.add_order_layout} onClick={(e) => e.stopPropagation()}>
-     {/* Error message for required fields */}
-     {errorMessage && <div className={styles.error_message}>{errorMessage}</div>} <br/>
       {/* Customer Fields */}
       <div className={styles.add_order_item}>
         {formItems.map((item) => (
@@ -124,7 +121,13 @@ const AddOrder = () => {
         ))}
       </div>
 
-      
+      <Snackbar
+              open={errorMessage!==''}
+              autoHideDuration={5000}
+              onClose={() => setErrorMessage('')}
+              message={errorMessage}
+              anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            />
 
       {/* Product Fields with Autocomplete in a row */}
       <div className={styles.modal_item}>

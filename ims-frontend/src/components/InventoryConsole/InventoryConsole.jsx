@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import styles from './InventoryConsole.module.css'
 import AddIcon from '@mui/icons-material/Add';
-import {TableCell, TableContainer, TableHead, TableRow, Paper, Table, TableBody, Button, TextField} from '@mui/material';
+import {TableCell, TableContainer, TableHead, TableRow, Paper, Table, TableBody, Button, TextField, Snackbar} from '@mui/material';
 import APIService from '../../services/APIService';
 import SearchFilterAddInventory from './SearchFilterAddInventory';
 import AddProductModal from './AddProductModal';
@@ -11,6 +11,8 @@ const InventoryConsole = () => {
     const [products, setProducts] = useState([]);
     const [showAddProductModal,setShowAddProductModal] = useState(false)
     const [showAddCategory,setShowAddCategory] = useState(false);
+    const [message, setMessage] = useState('')
+
     useEffect(()=>{
         APIService().fetchProducts().then((res) => {
             if(res.success){
@@ -33,15 +35,17 @@ const InventoryConsole = () => {
                     const availableQty = availabilityDict[product.id] || 0;  // Default to 0 if no availability is found
                     return { ...product, available_qty: availableQty };
                 });
-                setProducts(updatedProducts)           
+                setProducts(updatedProducts)  
+                setMessage('Availability retrieved')         
             }
-            console.log(res)
+            else{
+                setMessage(res.error)
+            }
         }).catch((err) => console.log(err))
     }
 
-    // Edit product handler
     const handleEditProduct = (product) => {
-        setEditingProduct({ ...product }); // Set the current product as the editing state
+        setEditingProduct({ ...product }); 
     };
     
     // Save edited product
@@ -54,9 +58,10 @@ const InventoryConsole = () => {
             product.id === updatedProduct.id ? updatedProduct : product
             );
             setProducts(updatedProducts);
-            setEditingProduct(null); // Close the edit mode
+            setEditingProduct(null); 
+            setMessage('Item details saved...')
         } else {
-            console.log(res.error);
+            setMessage(res.error);
         }
         }).catch((err) => console.log(err));
     };
@@ -67,8 +72,9 @@ const InventoryConsole = () => {
         if (res.success) {
             // Remove the deleted product from the list
             setProducts((prevProducts) => prevProducts.filter((product) => product.id !== productId));
+            setMessage('Item Deleted')
         } else {
-            console.log('Failed to delete product');
+            setMessage(res?.error)
         }
         }).catch((err) => console.log(err));
     };
@@ -87,6 +93,13 @@ const InventoryConsole = () => {
                 <AddProductModal type='category'/>
             </div>)}
 
+            <Snackbar
+                          open={message!==''}
+                          autoHideDuration={5000}
+                          onClose={() => setMessage('')}
+                          message={message}                        
+                          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                        />
             <div className={styles.inventory_layout}>            
                 <TableContainer component={Paper}>
                     <Table sx={{minWidth: 650}}>                    
@@ -94,9 +107,7 @@ const InventoryConsole = () => {
                             <TableRow>
                                 <TableCell> S.NO </TableCell>
                                 <TableCell> Product </TableCell>
-                                <TableCell 
-                                    className={styles.category_cell}
-                                >     
+                                <TableCell className={styles.category_cell}>     
                                     Category 
                                     <Button onClick={() => setShowAddCategory(true)}><AddIcon className={styles.plus_icon}/> </Button>
                                 </TableCell>

@@ -77,9 +77,6 @@ def get_products_with_available_quantity(date_from, date_to):
     return products_with_available_quantity
 
 
-import time
-import hashlib
-
 def generate_order_number(phone, name):
     timestamp = str(int(time.time()))  
     source_str = f"{phone}_{name}_{timestamp}"

@@ -21,8 +21,7 @@ const InventoryConsole = () => {
         }).catch((err) => console.log(err))
     },[])
     const addProductModal = (value) => {
-        setShowAddProductModal(value)
-        console.log(showAddProductModal)
+        setShowAddProductModal(value)        
     }
     const retrieveAvailability = (fromDate, toDate) => {
         APIService().fetchAvailability(fromDate,toDate).then((res) => {
@@ -50,10 +49,10 @@ const InventoryConsole = () => {
     
     // Save edited product
     const saveEditedProduct = (updatedProduct) => {
-        console.log(updatedProduct)
+        // console.log(updatedProduct)
         APIService().editProduct(updatedProduct).then((res) => {
         if (res.success) {
-            console.log(res)
+            // console.log(res)
             const updatedProducts = products.map((product) =>
             product.id === updatedProduct.id ? updatedProduct : product
             );
@@ -63,7 +62,7 @@ const InventoryConsole = () => {
         } else {
             setMessage(res.error);
         }
-        }).catch((err) => console.log(err));
+        }).catch((err) =>  console.log(err));
     };
     
     // Delete product handler
@@ -76,7 +75,7 @@ const InventoryConsole = () => {
         } else {
             setMessage(res?.error)
         }
-        }).catch((err) => console.log(err));
+        }).catch((err) =>  console.log(err));
     };
   
     return (

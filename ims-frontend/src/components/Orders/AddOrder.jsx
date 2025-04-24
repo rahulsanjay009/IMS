@@ -48,9 +48,9 @@ const AddOrder = ({orderAdded}) => {
     }).catch((err) => console.log(err));
   }, []);
 
-  useEffect(()=>{
-    console.log(order.from_date , order.to_date)
-  },[order])
+  // useEffect(()=>{
+  //   // console.log(order.from_date , order.to_date)
+  // },[order])
   const addOrderData = (key, value) => {
     setOrder((prev) => ({
       ...prev,
@@ -102,11 +102,11 @@ const AddOrder = ({orderAdded}) => {
 
   const addOrder = () => {
     // Validate fields (excluding customer_email)
-    const requiredFields = ['customer_name','customer_phone', 'from_date', 'to_date', 'paid', 'event_date'];
-    const missingFields = requiredFields.filter(field => !order[field]);
-
+    const requiredFields = ['customer_name','customer_phone', 'from_date', 'to_date', 'paid', 'event_date', 'products'];
+    const missingFields = requiredFields.filter(field => !order[field] || order[field]?.length === 0);
+    // console.log(missingFields, order.from_date)
     if (missingFields.length > 0) {
-      setErrorMessage('Please fill in all required fields');
+      setErrorMessage('Please fill in the required fields: '+JSON.stringify(missingFields));
       return;
     }
     // Format dates into strings before submission
@@ -118,7 +118,7 @@ const AddOrder = ({orderAdded}) => {
       event_date: order.event_date ? dayjs(order.event_date).format('YYYY-MM-DD') : '',
     };
     
-    console.log(formattedOrder)
+    // console.log(formattedOrder)
     APIService().saveOrder(formattedOrder).then((data) => {
         if(data?.success){
             setErrorMessage('Order Added Successfully');
@@ -138,37 +138,38 @@ const AddOrder = ({orderAdded}) => {
   const handleDateTimeChange = (key, subKey, value) => {
     const dateKey = `${key}_date_only`;
     const timeKey = `${key}_time_only`;
+  
     const newState = {
       ...order,
       [subKey === 'date' ? dateKey : timeKey]: value,
     };
   
-    let combined = combineDateTime(newState[dateKey], newState[timeKey]);
-  
-    // Auto-set from_date and to_date if event_date is changed
     if (key === 'event_date' && subKey === 'date' && value) {
       const eventDate = dayjs(value).set('hour', 18).set('minute', 0).set('second', 0);
       const pickupDate = eventDate.subtract(1, 'day');
   
-      newState.event_date = value;
-      newState.from_date_only = pickupDate;
-      newState.from_time_only = pickupDate;
-      newState.to_date_only = eventDate;
-      newState.to_time_only = eventDate;
-  
-      combined = null; // we'll manually set both from_date and to_date
       setOrder({
         ...newState,
+        event_date: value,
+        from_date_only: pickupDate,
+        from_time_only: pickupDate,
+        to_date_only: eventDate,
+        to_time_only: eventDate,
         from_date: pickupDate,
         to_date: eventDate,
       });
-    } else {
-      setOrder({
-        ...newState,
-        [key]: combined,
-      });
+      return;
     }
+  
+    const updatedOrder = {
+      ...newState,
+      from_date: combineDateTime(newState.from_date_only, newState.from_time_only),
+      to_date: combineDateTime(newState.to_date_only, newState.to_time_only),
+    };
+  
+    setOrder(updatedOrder);
   };
+  
   
   
   return (
@@ -289,11 +290,11 @@ const AddOrder = ({orderAdded}) => {
               <div className={styles.modal_item_date_wrap}>
                 <DatePicker
                   value={order.from_date_only}
-                  onChange={(val) => handleDateTimeChange('from_date', 'date', val)}
+                  onChange={(val) => handleDateTimeChange('from', 'date', val)}
                 />
                 <TimePicker
                   value={order.from_time_only}
-                  onChange={(val) => handleDateTimeChange('from_date', 'time', val)}
+                  onChange={(val) => handleDateTimeChange('from', 'time', val)}
                 />
               </div>              
             </LocalizationProvider>
@@ -304,12 +305,12 @@ const AddOrder = ({orderAdded}) => {
                 <div className={styles.modal_item_date_wrap}>
                   <DatePicker
                     value={order.to_date_only}
-                    onChange={(val) => handleDateTimeChange('to_date', 'date', val)}
+                    onChange={(val) => handleDateTimeChange('to', 'date', val)}
                     className={styles.add_order_textField}
                   />
                   <TimePicker
                     value={order.to_time_only}
-                    onChange={(val) => handleDateTimeChange('to_date', 'time', val)}
+                    onChange={(val) => handleDateTimeChange('to', 'time', val)}
                     className={styles.add_order_textField}
                   />
                 </div>

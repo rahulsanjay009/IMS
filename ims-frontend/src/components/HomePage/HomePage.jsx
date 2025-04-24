@@ -4,19 +4,18 @@ import { Button } from '@mui/material';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 const HomePage = () => {
-    const location = useLocation();
-    const path = ((location.pathname == '/orders')? 'O' : 'I') || ''
-    const [component,setComponent] = useState(path);
+
+    const [component,setComponent] = useState('S');
     const navigate = useNavigate();
 
     return (
         <div>
             <div>
-                <Button className = {styles.nav_button}
-                    variant={(component == 'I')?'contained' : 'outlined'}
-                    onClick={() => {navigate('/inventory'); setComponent('I')}} 
+                <Button className ={styles.nav_button}
+                    variant={(component == 'S')?'contained' : 'outlined'}
+                    onClick={() => {navigate('/scheduledPickups'); setComponent('S')}}
                     > 
-                    Inventory 
+                    Scheduled Pickups
                 </Button>
                 <Button className ={styles.nav_button}
                     variant={(component == 'O')?'contained' : 'outlined'}
@@ -24,6 +23,14 @@ const HomePage = () => {
                     > 
                     Orders 
                 </Button>
+                <Button className = {styles.nav_button}
+                    variant={(component == 'I')?'contained' : 'outlined'}
+                    onClick={() => {navigate('/inventory'); setComponent('I')}} 
+                    > 
+                    Inventory 
+                </Button>
+
+
             </div>
             
             <Outlet/>

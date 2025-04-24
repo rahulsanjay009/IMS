@@ -1,4 +1,4 @@
-import { TextField, Button, Select, MenuItem, InputLabel, Autocomplete } from '@mui/material';
+import { TextField, Button,  Autocomplete } from '@mui/material';
 import styles from './InventoryConsole.module.css';
 import { useEffect, useState } from 'react';
 import APIService from '../../services/APIService';

@@ -3,7 +3,7 @@ import styles from './InventoryConsole.module.css';
 import { useEffect, useState } from 'react';
 import APIService from '../../services/APIService';
 
-const AddProductModal = ({ type }) => {
+const AddProductModal = ({ type, updateMessage, updateShowAddCategory }) => {
     const productAttributes = [
         { id: 'name', value: 'Product Name' },
         { id: 'description', value: 'Description' },
@@ -47,10 +47,11 @@ const AddProductModal = ({ type }) => {
         }
         APIService().saveProduct(captureProduct).then((data) => {
             if (data?.success) {
-                setShowMsg('Product added successfully');
+                updateMessage('Product added successfully');
                 setCaptureProduct({
                     name: '', description: '', price: '', total_qty: '', category: ''
-                });                
+                });            
+                updateShowAddCategory(false)    
             }
             else{
                 setShowMsg('Product with the name already exists!!!');

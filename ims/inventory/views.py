@@ -117,6 +117,9 @@ def add_order(request):
         products_data = data.get("products", [])
         is_returned = False
         comments = data.get("comments", None)
+        is_delivery_required = data.get('is_delivery_required')
+        event_date = data.get("event_date")
+        address = data.get('delivery_address')
 
         # Step 1: Check if customer exists by phone number
         customer, created = Customer.objects.get_or_create(
@@ -133,9 +136,10 @@ def add_order(request):
             customer.save()
 
         # Step 2: Create Order
-        try:
+        try:            
             date_from = datetime.strptime(from_date, "%Y-%m-%d %H:%M:%S")
             date_to = datetime.strptime(to_date, "%Y-%m-%d %H:%M:%S")
+            event_date = datetime.strptime(event_date, "%Y-%m-%d")
         except ValueError as e:
             return JsonResponse({"success": False, "error": f"Invalid date format: {str(e)}"}, status=200)
         
@@ -152,7 +156,10 @@ def add_order(request):
                 is_paid=is_paid,
                 customer=customer,
                 comments=comments,
-                is_returned=is_returned
+                is_returned=is_returned,
+                is_delivery_required = is_delivery_required,
+                address = address,
+                event_date = event_date
             )
             
             # Step 3: Create OrderItems for each product
@@ -204,7 +211,7 @@ def add_order(request):
 @api_view(['GET'])
 def get_orders(request):
     try:
-        result_set = Order.objects.select_related('customer').all().order_by('-date_from')
+        result_set = Order.objects.select_related('customer').all().order_by('-event_date')
         order_list = normalize('orders',result_set)
         return JsonResponse({"success":True,"orders":order_list},status = 200)
     except Exception as e:
@@ -455,3 +462,15 @@ def confirm_order_return(request):
     except Exception as e:
         return JsonResponse({'success':False,'error': str(e)}, status=500)
     
+
+@api_view(['POST'])
+def order_delete(request):
+    data = json.loads(request.body)
+    order_id = data.get("order_id")
+
+    try:
+        order = Order.objects.get(id=order_id)
+        order.delete()
+        return JsonResponse({'success': True, 'message': 'Order deleted'}, status=200)
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)

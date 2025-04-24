@@ -1,6 +1,6 @@
 const APIService = () => {
-    //const API_END_POINT = 'https://chinnisanjay2504.pythonanywhere.com'
-    const API_END_POINT = 'http://localhost:8000'
+    const API_END_POINT = 'https://chinnisanjay2504.pythonanywhere.com'
+    // const API_END_POINT = 'http://localhost:8000'
     const makeRequest = async (url, method, body = null) => {
         // Set the headers for the request, assuming JSON data
         const headers = {
@@ -80,7 +80,16 @@ const APIService = () => {
         const url = `${API_END_POINT}/inventory/send_order_confirmation`
         return await makeRequest(url, 'POST',{order_id,email})       
       }
-    
+
+      const confirmReturn = async (order_id) => {
+        const url = `${API_END_POINT}/inventory/confirm_order_return`
+        return await makeRequest(url, 'POST',{order_id})       
+      }
+      
+      const deleteOrder = async (order_id) => {
+        const url = `${API_END_POINT}/inventory/erase_order`
+        return await makeRequest(url, 'POST',{order_id})       
+      }
 
     return {
             fetchProducts, 
@@ -93,7 +102,9 @@ const APIService = () => {
             saveOrderToDB,
             editProduct,
             deleteProduct,
-            sendConfirmation
+            sendConfirmation,
+            confirmReturn,
+            deleteOrder
           }
     
 }

@@ -5,6 +5,9 @@
     background-color: #f9f9f9;
     border-radius: 8px;
 }
+.order_layout{
+    margin:10px;
+}
 .product_row {
     display: flex;
     align-items: center;
@@ -25,14 +28,15 @@
 }
 .date_picker_row {
     display: flex;
-    gap: 20px;  /* Space between date pickers */
-    flex-wrap: wrap;  /* Allow wrapping on small screens */
-}
-
-.date_picker_item {
+    flex-wrap: wrap;
+    gap: 16px; /* Controls spacing between columns */
+    align-items: flex-start;
+  }
+  
+  .date_picker_item {
     flex: 1;
-    min-width: 200px;  /* Ensures each picker has a minimum width */
-}
+    min-width: 250px; /* Prevents shrinkage on small screens */
+  }
 
 .add_order_item {
     display: flex;
@@ -45,7 +49,10 @@
     flex: 1; /* Make inputs flexible */
     width: 100%; /* Ensure inputs are not too small */
 }
-
+.modal_item_date_wrap{
+    display:flex;
+    gap:10px;
+}
 .modal_item {
     margin-bottom: 20px;
 }

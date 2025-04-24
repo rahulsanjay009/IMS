@@ -85,12 +85,12 @@ const InventoryConsole = () => {
             
             {showAddProductModal && (
             <div className={styles.modal} onClick={() => setShowAddProductModal(false)}>
-                <AddProductModal type='product'/>
+                <AddProductModal type='product' updateMessage={setMessage} updateShowAddCategory={setShowAddProductModal}/>
             </div>)}
             
             {showAddCategory && (
             <div className={styles.modal} onClick={() => setShowAddCategory(false)}>
-                <AddProductModal type='category'/>
+                <AddProductModal type='category' updateMessage={setMessage} updateShowAddCategory={setShowAddCategory}/>
             </div>)}
 
             <Snackbar

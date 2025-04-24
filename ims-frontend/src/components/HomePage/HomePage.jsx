@@ -1,30 +1,32 @@
 import { useState } from 'react';
-import InventoryConsole from '../InventoryConsole/InventoryConsole';
-import Orders from '../Orders/Orders';
 import styles from './HomePage.module.css'
 import { Button } from '@mui/material';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 const HomePage = () => {
-    
-    const [component,setComponent] = useState('');
+    const location = useLocation();
+    const path = ((location.pathname == '/orders')? 'O' : 'I') || ''
+    const [component,setComponent] = useState(path);
+    const navigate = useNavigate();
+
     return (
-        <div className='home-layout'>
+        <div>
             <div>
-                <Button 
-                    variant='contained'
-                    onClick={() => setComponent('inventory')} 
-                    color={(component == 'inventory')? "success":'primary'}> 
+                <Button className = {styles.nav_button}
+                    variant={(component == 'I')?'contained' : 'outlined'}
+                    onClick={() => {navigate('/inventory'); setComponent('I')}} 
+                    > 
                     Inventory 
                 </Button>
-                <Button 
-                    variant='contained'
-                    onClick={() => setComponent('orders')}
-                    color={(component == 'orders')? "success":'primary'}> 
+                <Button className ={styles.nav_button}
+                    variant={(component == 'O')?'contained' : 'outlined'}
+                    onClick={() => {navigate('/orders'); setComponent('O')}}
+                    > 
                     Orders 
                 </Button>
             </div>
-            {(component == 'inventory') && <InventoryConsole/>}
-            {(component == 'orders') && <Orders/>}
+            
+            <Outlet/>
             
         </div>
     )

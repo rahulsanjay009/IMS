@@ -32,4 +32,5 @@ urlpatterns = [
     path('inventory/delete_product',views.delete_product, name='delete_product'),
     path('inventory/send_order_confirmation',views.send_order_confirmation, name='send_order_confirmation'),
     path('inventory/confirm_order_return',views.confirm_order_return, name='confirm_order_return'),
+    path('inventory/erase_order',views.order_delete, name='erase_order'),
 ]

@@ -43,6 +43,9 @@ class Order(models.Model):
     comments = models.TextField()
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
     is_returned = models.BooleanField()
+    is_delivery_required = models.BooleanField()
+    event_date = models.DateField()
+    address = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return str(self.number)

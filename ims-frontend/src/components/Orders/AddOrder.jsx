@@ -8,20 +8,32 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import DeleteIcon from '@mui/icons-material/Delete';
 import dayjs from 'dayjs'
 import { format } from 'date-fns';
+import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 
-const AddOrder = () => {
-    const initialOrderState = {
-        customer_name: '',
-        customer_phone: '',
-        customer_email: '',  // Optional
-        products: [],
-        from_date: null,
-        to_date: null,
-        paid: '',
-        comments:''
-      }
+const AddOrder = ({orderAdded}) => {
+  const initialOrderState = {
+    customer_name: '',
+    customer_phone: '',
+    customer_email: '',
+    products: [],
+    from_date: null,  
+    to_date: null,
+    from_date_only: null,  
+    from_time_only: dayjs().set('hour', 18).set('minute', 0).set('second', 0),
+    to_date_only: null,
+    to_time_only: dayjs().set('hour', 18).set('minute', 0).set('second', 0),
+    paid: '',
+    comments: '',
+    event_date:null,
+    is_delivery_required:null,
+    delivery_address:''
+  };
+  const formItems = [
+    { label: 'Customer Name', key: 'customer_name', type: 'text' },
+    { label: 'Customer Phone', key: 'customer_phone', type: 'text' },
+    // { label: 'Customer Email', key: 'customer_email', type: 'email' },  // Optional
+  ];
   const [order, setOrder] = useState(initialOrderState);
-
   const [productList, setProductList] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState('');
@@ -37,7 +49,7 @@ const AddOrder = () => {
   }, []);
 
   useEffect(()=>{
-    console.log(order)
+    console.log(order.from_date , order.to_date)
   },[order])
   const addOrderData = (key, value) => {
     setOrder((prev) => ({
@@ -45,7 +57,14 @@ const AddOrder = () => {
       [key]: value,
     }));
   };
-
+  const combineDateTime = (date, time) => {
+    if (!date || !time) return null;
+    return dayjs(date)
+      .hour(dayjs(time).hour())
+      .minute(dayjs(time).minute())
+      .second(0);
+  };
+  
   const addProduct = () => {
     if (selectedProduct && quantity) {
       const newProduct = { name: selectedProduct?.name, product_id: selectedProduct?.id, quantity };
@@ -53,22 +72,37 @@ const AddOrder = () => {
         ...prev,
         products: [...prev.products, newProduct],
       }));
+  
+      // Remove selected product from dropdown list
+      setProductList((prevList) =>
+        prevList.filter((product) => product.id !== selectedProduct.id)
+      );
+  
       setSelectedProduct(null);
       setQuantity('');
     }
   };
-
+  
   const removeProduct = (index) => {
+    const removedProduct = order.products[index];
     const updatedProducts = order.products.filter((_, idx) => idx !== index);
+  
     setOrder((prev) => ({
       ...prev,
       products: updatedProducts,
     }));
+  
+    // Add removed product back to the dropdown list
+    setProductList((prevList) => [
+      ...prevList,
+      { id: removedProduct.product_id, name: removedProduct.name },
+    ]);
   };
+  
 
   const addOrder = () => {
     // Validate fields (excluding customer_email)
-    const requiredFields = ['customer_name', 'customer_phone', 'from_date', 'to_date', 'paid'];
+    const requiredFields = ['customer_name','customer_phone', 'from_date', 'to_date', 'paid', 'event_date'];
     const missingFields = requiredFields.filter(field => !order[field]);
 
     if (missingFields.length > 0) {
@@ -77,10 +111,13 @@ const AddOrder = () => {
     }
     // Format dates into strings before submission
     const formattedOrder = {
-    ...order,
-    from_date: order.from_date ? dayjs(order.from_date).format('YYYY-MM-DD HH:mm:ss') : '',
-    to_date: order.to_date ? dayjs(order.to_date).format('YYYY-MM-DD HH:mm:ss') : '',
+      ...order,
+      is_delivery_required: order.is_delivery_required == 'true' ? true : false, 
+      from_date: order.from_date ? dayjs(order.from_date).format('YYYY-MM-DD HH:mm:ss') : '',
+      to_date: order.to_date ? dayjs(order.to_date).format('YYYY-MM-DD HH:mm:ss') : '',
+      event_date: order.event_date ? dayjs(order.event_date).format('YYYY-MM-DD') : '',
     };
+    
     console.log(formattedOrder)
     APIService().saveOrder(formattedOrder).then((data) => {
         if(data?.success){
@@ -88,6 +125,7 @@ const AddOrder = () => {
             setOrder(initialOrderState); // Reset order state
             setSelectedProduct(null);    // Reset selected product
             setQuantity('');             // Reset quantity
+            orderAdded();
         }
         else{
             setErrorMessage(data.error);
@@ -96,13 +134,43 @@ const AddOrder = () => {
     }).catch((err)=>console.log(err))
   };
 
-  // Form items configuration (customer email is optional)
-  const formItems = [
-    { label: 'Customer Name', key: 'customer_name', type: 'text' },
-    { label: 'Customer Phone', key: 'customer_phone', type: 'text' },
-    { label: 'Customer Email', key: 'customer_email', type: 'email' },  // Optional
-  ];
-
+ 
+  const handleDateTimeChange = (key, subKey, value) => {
+    const dateKey = `${key}_date_only`;
+    const timeKey = `${key}_time_only`;
+    const newState = {
+      ...order,
+      [subKey === 'date' ? dateKey : timeKey]: value,
+    };
+  
+    let combined = combineDateTime(newState[dateKey], newState[timeKey]);
+  
+    // Auto-set from_date and to_date if event_date is changed
+    if (key === 'event_date' && subKey === 'date' && value) {
+      const eventDate = dayjs(value).set('hour', 18).set('minute', 0).set('second', 0);
+      const pickupDate = eventDate.subtract(1, 'day');
+  
+      newState.event_date = value;
+      newState.from_date_only = pickupDate;
+      newState.from_time_only = pickupDate;
+      newState.to_date_only = eventDate;
+      newState.to_time_only = eventDate;
+  
+      combined = null; // we'll manually set both from_date and to_date
+      setOrder({
+        ...newState,
+        from_date: pickupDate,
+        to_date: eventDate,
+      });
+    } else {
+      setOrder({
+        ...newState,
+        [key]: combined,
+      });
+    }
+  };
+  
+  
   return (
     <div className={styles.add_order_layout} onClick={(e) => e.stopPropagation()}>
       {/* Customer Fields */}
@@ -206,28 +274,73 @@ const AddOrder = () => {
       <div className={styles.modal_item}>
         <div className={styles.date_picker_row}>
           <div className={styles.date_picker_item}>
+            <div className={styles.modal_item_label}>Event Date</div>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>                            
+              <DatePicker sx={{width:'100%'}}
+                value={order.event_date}
+                onChange={(val) => handleDateTimeChange('event_date', 'date', val)}
+              />                                        
+            </LocalizationProvider>
+          </div>
+          <div className={styles.date_picker_item}>
             <div className={styles.modal_item_label}>Pick Up Date & Time</div>
             <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <DateTimePicker
-                value={order.from_date}
-                onChange={(newValue) => addOrderData('from_date', newValue)}
-                className={styles.add_order_textField}
-              />
+              
+              <div className={styles.modal_item_date_wrap}>
+                <DatePicker
+                  value={order.from_date_only}
+                  onChange={(val) => handleDateTimeChange('from_date', 'date', val)}
+                />
+                <TimePicker
+                  value={order.from_time_only}
+                  onChange={(val) => handleDateTimeChange('from_date', 'time', val)}
+                />
+              </div>              
             </LocalizationProvider>
           </div>
           <div className={styles.date_picker_item}>
             <div className={styles.modal_item_label}>Drop Off Date & Time</div>
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <DateTimePicker
-                value={order.to_date}
-                onChange={(newValue) => addOrderData('to_date', newValue)}
-                className={styles.add_order_textField}
-              />
-            </LocalizationProvider>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <div className={styles.modal_item_date_wrap}>
+                  <DatePicker
+                    value={order.to_date_only}
+                    onChange={(val) => handleDateTimeChange('to_date', 'date', val)}
+                    className={styles.add_order_textField}
+                  />
+                  <TimePicker
+                    value={order.to_time_only}
+                    onChange={(val) => handleDateTimeChange('to_date', 'time', val)}
+                    className={styles.add_order_textField}
+                  />
+                </div>
+              </LocalizationProvider>
           </div>
         </div>
       </div>
 
+      {/*Delivery Field*/}
+      <div className={styles.modal_item}>
+        <div className={styles.modal_item_label}>Delivery Required?</div>
+        <FormControl component="fieldset">
+          <RadioGroup
+            row
+            value={order.is_delivery_required}
+            onChange={(e) => addOrderData('is_delivery_required', e.target.value)}
+          >
+            <FormControlLabel value="true" control={<Radio />} label="Yes" />
+            <FormControlLabel value="false" control={<Radio />} label="No" />
+          </RadioGroup>                 
+        </FormControl>
+        {order.is_delivery_required == 'true' && <TextField
+            fullWidth
+            variant="outlined"
+            label="Add Address"
+            type="Text"
+            value={order["delivery_address"]}
+            className={styles.add_order_textField}
+            onChange={(e) => addOrderData("delivery_address", e.target.value)}
+          />}        
+      </div>
       {/* Paid Field */}
       <div className={styles.modal_item}>
         <div className={styles.modal_item_label}>Paid?</div>
@@ -239,9 +352,10 @@ const AddOrder = () => {
           >
             <FormControlLabel value="true" control={<Radio />} label="Yes" />
             <FormControlLabel value="false" control={<Radio />} label="No" />
-          </RadioGroup>
-         
+          </RadioGroup>                 
         </FormControl>
+      </div>          
+      <div className={styles.modal_item}>
         <TextField
             fullWidth
             variant="outlined"
@@ -251,10 +365,7 @@ const AddOrder = () => {
             className={styles.add_order_textField}
             onChange={(e) => addOrderData("comments", e.target.value)}
           />
-
-      </div>
-
-      
+      </div>   
       {/* Submit Button */}
       <Button variant="contained" onClick={addOrder} className={styles.add_order_button}>
         Submit Order

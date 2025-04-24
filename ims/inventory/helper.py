@@ -41,6 +41,9 @@ def normalize(type,data):
                     'from_date': order.date_from,
                     'to_date': order.date_to,
                     'comments': order.comments,
+                    'event_date':order.event_date,
+                    'is_delivery_required' : order.is_delivery_required,
+                    'address':order.address,
                     'items': items  # <- Add items inside the order
                 })
     return result_data

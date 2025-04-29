@@ -38,14 +38,14 @@ const AddOrder = ({orderAdded}) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [quantity, setQuantity] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-
+  const [loader,setLoader] = useState(false)
   useEffect(() => {
     // Fetch products from API
     APIService().fetchProducts().then((data) => {
       if (data?.success) {
         setProductList(data?.products);
       }
-    }).catch((err) => console.log(err));
+    }).catch((err) => console.log(err))
   }, []);
 
   // useEffect(()=>{
@@ -109,6 +109,7 @@ const AddOrder = ({orderAdded}) => {
       setErrorMessage('Please fill in the required fields: '+JSON.stringify(missingFields));
       return;
     }
+    setLoader(true);
     // Format dates into strings before submission
     const formattedOrder = {
       ...order,
@@ -131,7 +132,7 @@ const AddOrder = ({orderAdded}) => {
             setErrorMessage(data.error);
         }
         
-    }).catch((err)=>console.log(err))
+    }).catch((err)=>console.log(err)).finally(()=>setLoader(false))
   };
 
  
@@ -175,6 +176,7 @@ const AddOrder = ({orderAdded}) => {
   return (
     <div className={styles.add_order_layout} onClick={(e) => e.stopPropagation()}>
       {/* Customer Fields */}
+      {loader && <div className='loader-overlay'> <div className='loader'> </div></div>} 
       <div className={styles.add_order_item}>
         {formItems.map((item) => (
           <TextField

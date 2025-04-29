@@ -3,25 +3,10 @@ from django.db.models import Sum
 import hashlib
 import time
 
-
-def normalize(type,data):
-    result_data = []
-    if(type == 'products'):        
-        for product in data:
-                result_data.append({
-                    'id': str(product.id),  # Convert UUID to string to ensure it's serializable
-                    'name': product.name,
-                    'description': product.description,
-                    'price': str(product.price),  # Convert Decimal to string to avoid issues
-                    'total_qty': product.total_qty,
-                    'category': product.category.name if product.category else 'No category',  # Handle missing category
-                })
-    elif type == 'categories':
-         for category in data:
-              result_data.append(category.name)
-    elif type == 'orders':
-        for order in data:
-            if order.is_returned is False:
+def get_orders_by_type(data, current_orders):
+    result_data = []    
+    for order in data:
+            if order.is_returned is current_orders:
                 # Get order items
                 items = []
                 for item in order.items.all():
@@ -46,6 +31,28 @@ def normalize(type,data):
                     'address':order.address,
                     'items': items  # <- Add items inside the order
                 })
+    return result_data
+
+def normalize(type,data,orders_type = 1):
+    result_data = []
+    if(type == 'products'):        
+        for product in data:
+                result_data.append({
+                    'id': str(product.id),  # Convert UUID to string to ensure it's serializable
+                    'name': product.name,
+                    'description': product.description,
+                    'price': str(product.price),  # Convert Decimal to string to avoid issues
+                    'total_qty': product.total_qty,
+                    'category': product.category.name if product.category else 'No category',  # Handle missing category
+                })
+    elif type == 'categories':
+         for category in data:
+              result_data.append(category.name)
+    elif type == 'orders':    
+        if int(orders_type) == 1:
+            result_data = get_orders_by_type(data, False)
+        else:
+            result_data = get_orders_by_type(data, True)            
     return result_data
 
 

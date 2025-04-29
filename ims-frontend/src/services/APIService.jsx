@@ -51,8 +51,8 @@ const APIService = () => {
         return await makeRequest(url,'POST',order)
       }
 
-      const fetchOrders = async () => {
-        const url = `${API_END_POINT}/inventory/orders`
+      const fetchOrders = async (input) => {
+        const url = `${API_END_POINT}/inventory/orders?type=${input}`
         return await makeRequest(url,'GET');
       }
 

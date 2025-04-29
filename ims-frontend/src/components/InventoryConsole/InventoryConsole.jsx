@@ -9,21 +9,31 @@ import AddProductModal from './AddProductModal';
 const InventoryConsole = () => {
     const [editingProduct, setEditingProduct] = useState(null);
     const [products, setProducts] = useState([]);
+    const [originalProducts,setOriginalProducts] = useState([])
     const [showAddProductModal,setShowAddProductModal] = useState(false)
     const [showAddCategory,setShowAddCategory] = useState(false);
     const [message, setMessage] = useState('')
+    const [loader,setLoader] = useState(false)
 
     useEffect(()=>{
+        setLoader(true)
+        fetchProducts()
+    },[])
+    const fetchProducts = () => {
         APIService().fetchProducts().then((res) => {
             if(res.success){
                 setProducts(res?.products);
+                setOriginalProducts(res?.products)
             }
-        }).catch((err) => console.log(err))
-    },[])
+        }).catch((err) => console.log(err)).finally(()=>{
+            setLoader(false);
+        })
+    }
     const addProductModal = (value) => {
         setShowAddProductModal(value)        
     }
     const retrieveAvailability = (fromDate, toDate) => {
+        setLoader(true)
         APIService().fetchAvailability(fromDate,toDate).then((res) => {
             if(res?.success){
                 const availabilityDict =  res?.availableProducts.reduce((acc, item) => {
@@ -32,15 +42,15 @@ const InventoryConsole = () => {
                 }, {});
                 const updatedProducts = products.map(product => {
                     const availableQty = availabilityDict[product.id] || 0;  // Default to 0 if no availability is found
-                    return { ...product, available_qty: availableQty };
+                    return { ...product, available_qty: availableQty < 0? 0 : availableQty };
                 });
-                setProducts(updatedProducts)  
+                setProducts(updatedProducts) 
                 setMessage('Availability retrieved')         
             }
             else{
                 setMessage(res.error)
             }
-        }).catch((err) => console.log(err))
+        }).catch((err) => console.log(err)).finally(()=>{setLoader(false)})
     }
 
     const handleEditProduct = (product) => {
@@ -50,6 +60,7 @@ const InventoryConsole = () => {
     // Save edited product
     const saveEditedProduct = (updatedProduct) => {
         // console.log(updatedProduct)
+        setLoader(true)
         APIService().editProduct(updatedProduct).then((res) => {
         if (res.success) {
             // console.log(res)
@@ -62,11 +73,12 @@ const InventoryConsole = () => {
         } else {
             setMessage(res.error);
         }
-        }).catch((err) =>  console.log(err));
+        }).catch((err) =>  console.log(err)).finally(()=> setLoader(false));
     };
     
     // Delete product handler
     const handleDeleteProduct = (productId) => {
+        setLoader(true)
         APIService().deleteProduct(productId).then((res) => {
         if (res.success) {
             // Remove the deleted product from the list
@@ -75,12 +87,19 @@ const InventoryConsole = () => {
         } else {
             setMessage(res?.error)
         }
-        }).catch((err) =>  console.log(err));
+        }).catch((err) =>  console.log(err)).finally(()=>{setLoader(false)});
     };
-  
+    
+    const filterProducts = (filteredProducts) =>{
+        // console.log(filteredProducts.length)
+        if(filteredProducts.length == 0)
+            setProducts(originalProducts)
+        else   
+            setProducts(originalProducts.filter((product) => filteredProducts.some((item) => item?.id === product?.id)))
+    }
     return (
         <div className=''>
-            <SearchFilterAddInventory addProductModal={addProductModal} retrieveAvailability={retrieveAvailability}/>
+            <SearchFilterAddInventory addProductModal={addProductModal} retrieveAvailability={retrieveAvailability} products={originalProducts} filteredProducts={filterProducts}/>
             
             {showAddProductModal && (
             <div className={styles.modal} onClick={() => setShowAddProductModal(false)}>
@@ -179,6 +198,7 @@ const InventoryConsole = () => {
                     </Table>
                 </TableContainer>
             </div>
+            { loader && <div className='loader-overlay'> <div className='loader'> </div> </div>}
         </div>
     )
 }

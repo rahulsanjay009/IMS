@@ -14,7 +14,7 @@ const ScheduledPickups = () => {
         });
       };
     useEffect(()=>{
-        APIService().fetchOrders().then((res)=>{
+        APIService().fetchOrders(1).then((res)=>{
             if(res?.success)
                 setOrders(res?.orders);
             else

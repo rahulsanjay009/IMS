@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
-import { useNavigate } from 'react-router-dom';
 import APIService from '../../services/APIService';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import AddProductToOrder from './AddProductToOrder';
@@ -21,6 +20,7 @@ const Orders = () => {
     const [errorMsg,setErrorMsg] = useState('')        
     const [email,setEmail] = useState('')
     const [flagOrderToEmail, setFlagOrderToEmail] = useState(null);
+    const [loader,setLoader] = useState(false);
 
   useEffect(() => {
     fetchOrders();
@@ -29,12 +29,14 @@ const Orders = () => {
     // console.log(orders)
   },[orders])
   const fetchOrders = () => {
-    APIService().fetchOrders().then((data) => {
+    setLoader(true);
+    APIService().fetchOrders(1).then((data) => {
       if (data?.success) {
+        console.log(data?.orders)
         setOrders(data?.orders);
         setEditable(new Array(data?.orders.length).fill(true));
       }
-    }).catch((err) =>  console.log(err));
+    }).catch((err) =>  console.log(err)).finally(()=>{ setLoader(false)});
   };
 
   const formatDate = (date) => {
@@ -57,6 +59,7 @@ const Orders = () => {
       comments: orders[idx]?.comments
     };
     // console.log(orderToSave)
+    setLoader(true)
     APIService().saveOrderToDB(orderToSave).then((res) => {
       if (res?.success) {
         setEditable((prev) => {
@@ -68,7 +71,7 @@ const Orders = () => {
       } else {
         setErrorMsg(res?.error)
       }
-    }).catch((err) =>  console.log(err));
+    }).catch((err) =>  console.log(err)).finally(()=>{setLoader(false)});
 
   };
 
@@ -137,6 +140,7 @@ const Orders = () => {
   const sendConfirmation = () => {
     if(email === ''||flagOrderToEmail===null)
         return;    
+    setLoader(true)
     APIService().sendConfirmation(email, flagOrderToEmail).then((res)=>{
         if(res.success){
             setErrorMsg('Order Confirmation sent!!!')
@@ -145,7 +149,7 @@ const Orders = () => {
         else{
             setErrorMsg(res.error)
         }
-    }).catch((err)=>{ console.log(err)})
+    }).catch((err)=>{ console.log(err)}).finally(()=>{setLoader(false)})
   }
 
   const formatItemsGrid = (items, maxCols = 4) => {
@@ -216,13 +220,15 @@ const Orders = () => {
           </div>
         </div>
       )}
-  
+    
       <Box mb={3}>
         <Button variant="contained" onClick={() => setShowProductModal(2)} startIcon={<AddCircleIcon />}>
           Add Order
         </Button>
       </Box>
-  
+      
+      { loader && <div className='loader-overlay'> <div className='loader'> </div> </div>}
+
       <Snackbar
         open={errorMsg !== ''}
         autoHideDuration={5000}

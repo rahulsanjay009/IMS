@@ -34,7 +34,7 @@ def add_product(request):
         price = data.get('price', None)
         total_qty = data.get('total_qty', None)
         category_text = data.get('category', None)
-
+        image_url = data.get('image_url',None)
         if not name:
             return JsonResponse({"success": False, "message": "Product name is required."}, status=400)
 
@@ -51,7 +51,7 @@ def add_product(request):
             price=price,
             total_qty=total_qty,
             category=category or None,
-            image_url=None
+            image_url=image_url
         )
         product.save()
 
@@ -62,7 +62,11 @@ def add_product(request):
 @api_view(['GET'])
 def product_list(request):
     try:
-        products = Product.objects.all()
+        category_type = request.GET.get('list','ALL')
+        if category_type == 'ALL':
+            products = Product.objects.all()
+        else:
+            products = Product.objects.filter(category__name__iexact=category_type)
         # Create a list of dictionaries with product data
         product_data = normalize('products',products)
         # Return the list of products as a JSON response

@@ -128,7 +128,7 @@ const InventoryConsole = () => {
                                 <TableCell className={styles.category_cell}>     
                                     Category 
                                     <Button onClick={() => setShowAddCategory(true)}><AddIcon className={styles.plus_icon}/> </Button>
-                                </TableCell>
+                                </TableCell>            
                                 <TableCell> Price per unit </TableCell>
                                 <TableCell> Total Qty </TableCell>
                                 <TableCell> Available Qty </TableCell>

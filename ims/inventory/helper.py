@@ -43,6 +43,7 @@ def normalize(type,data,orders_type = 1):
                     'description': product.description,
                     'price': str(product.price),  # Convert Decimal to string to avoid issues
                     'total_qty': product.total_qty,
+                    'image_url':product.image_url,
                     'category': product.category.name if product.category else 'No category',  # Handle missing category
                 })
     elif type == 'categories':

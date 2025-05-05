@@ -10,6 +10,7 @@ const AddProductModal = ({ type, updateMessage, updateShowAddCategory }) => {
         { id: 'price', value: 'Price per unit' },
         { id: 'total_qty', value: 'Total in hand quantity' }
     ];
+    const [image, setImage] = useState(null);
     const [captureProduct, setCaptureProduct] = useState({
         name: '', description: '', price: '', total_qty: '', category: ''
     });
@@ -37,30 +38,49 @@ const AddProductModal = ({ type, updateMessage, updateShowAddCategory }) => {
         if (type === 'product') {
             fetchCategories();
         }
-        console.log(captureProduct)
+        // console.log(captureProduct)
     }, [type, captureProduct]);
 
-    const saveProduct = () => {
-        if (Object.values(captureProduct).some(value => (value === '' || value === null))) {
-            setShowMsg('Please fill in all the details');
+    const saveProduct = async () => {
+        // Check if any product field is empty
+        const requiredFields = ['name', 'description', 'price', 'total_qty', 'category'];
+        const hasEmptyFields = requiredFields.some(key => !captureProduct[key]);
+    
+        if (hasEmptyFields || !image) {
+            setShowMsg('Please fill in all the details and upload an image.');
+            setTimeout(() => setShowMsg(''), 2000);
             return;
         }
-        APIService().saveProduct(captureProduct).then((data) => {
-            if (data?.success) {
-                updateMessage('Product added successfully');
-                setCaptureProduct({
-                    name: '', description: '', price: '', total_qty: '', category: ''
-                });            
-                updateShowAddCategory(false)    
+    
+        try {
+            const uploadResult = await uploadImageToCloudinary(image);
+            if (uploadResult.success) {
+                const updatedProduct = {
+                    ...captureProduct,
+                    image_url: uploadResult.url
+                };
+                const res = await APIService().saveProduct(updatedProduct);
+                if (res.success) {
+                    updateMessage('Product added successfully');
+                    setCaptureProduct({
+                        name: '', description: '', price: '', total_qty: '', category: ''
+                    });
+                    setImage(null);
+                    updateShowAddCategory(false);
+                } else {
+                    setShowMsg('Product with the name already exists!!!');
+                }
+            } else {
+                setShowMsg('Image upload failed');
             }
-            else{
-                setShowMsg('Product with the name already exists!!!');
-            }
-            setTimeout(() => {
-                setShowMsg('');                    
-            }, 2000);
-        }).catch((err) => console.log(err));
+        } catch (err) {
+            console.error(err);
+            setShowMsg('An error occurred. Please try again.');
+        }
+    
+        setTimeout(() => setShowMsg(''), 2000);
     };
+    
 
     const saveCategory = () => {
         if (category === '') {
@@ -88,6 +108,31 @@ const AddProductModal = ({ type, updateMessage, updateShowAddCategory }) => {
         });
     };
 
+    const uploadImageToCloudinary = async (file) => {
+        if (!file) return { success: false };
+    
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', 'unsigned_preset'); // Replace with your preset
+    
+        try {
+            const response = await fetch('https://api.cloudinary.com/v1_1/dmm4awbwm/image/upload', {
+                method: 'POST',
+                body: formData,
+            });
+    
+            const data = await response.json();
+            console.log(data)
+            if (data.secure_url) {
+                return { success: true, url: data.secure_url };
+            } else {
+                return { success: false };
+            }
+        } catch (error) {
+            console.error('Upload failed:', error);
+            return { success: false };
+        }
+    };
     
     const renderProductForm = () => (
         <>
@@ -108,6 +153,7 @@ const AddProductModal = ({ type, updateMessage, updateShowAddCategory }) => {
                     renderInput={(params) => <TextField {...params} label="Select Category" />}
                     />
                 </div>
+         
             </div>
 
             {productAttributes.map((item) => (
@@ -126,6 +172,19 @@ const AddProductModal = ({ type, updateMessage, updateShowAddCategory }) => {
                     </div>
                 </div>
             ))}
+            <div className={styles.modal_item} key={"image"}>
+                <div className={styles.modal_item_label}>
+                    {"Image"}
+                </div>
+                <div className={styles.modal_item_input}>
+                    <TextField
+                        fullWidth='100%'
+                        variant='outlined'
+                        type={"file"}
+                        onChange={(e) => setImage(e.target.files[0])}                        
+                    />
+                </div>
+            </div>
             <Button variant='contained' onClick={saveProduct}>Save</Button>
         </>
     );

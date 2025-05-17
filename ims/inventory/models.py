@@ -5,6 +5,8 @@ import uuid
 class Category(models.Model):
     name = models.CharField(max_length = 255, unique=True)
     id = models.UUIDField(primary_key = True, default = uuid.uuid4, editable = False)
+    image_url = models.URLField(null = True, blank = True)
+    image_public_id = models.CharField(max_length=255, blank=True, null=True)
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['name'], name='unique_category_name', condition=models.Q(name__iexact=models.F('name')))
@@ -20,6 +22,8 @@ class Product(models.Model):
     total_qty = models.IntegerField()
     category = models.ForeignKey(Category, on_delete = models.SET_NULL, null = True, blank = True)
     image_url = models.URLField(null = True, blank = True)
+    image_public_id = models.CharField(max_length=255, blank=True, null=True)
+
 
     def __str__(self):
         return self.name
@@ -58,3 +62,14 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f'{self.order} x {self.product.name}'
+    
+class RecentEvents(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_name = models.TextField(null=True)
+    image_url = models.URLField(null = True, blank = True)
+    image_public_id = models.CharField(max_length=255, blank=True, null=True)
+    event_description = models.TextField(null=True)
+    def __str__(self):
+        return f'{self.event_name} x {self.image_public_id}'
+    
+    

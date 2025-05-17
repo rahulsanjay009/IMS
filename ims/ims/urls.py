@@ -33,4 +33,12 @@ urlpatterns = [
     path('inventory/send_order_confirmation',views.send_order_confirmation, name='send_order_confirmation'),
     path('inventory/confirm_order_return',views.confirm_order_return, name='confirm_order_return'),
     path('inventory/erase_order',views.order_delete, name='erase_order'),
+    path('inventory/recent_events',views.recent_events, name='erase_order'),
+    path('inventory/create_recent_event',views.create_recent_event, name='create_recent_event'),
+    path('inventory/update_recent_event',views.update_recent_event, name='update_recent_event'),
+    path('inventory/delete_recent_event',views.delete_recent_event, name='delete_recent_event'),
+    path('inventory/fetch_categories',views.fetch_categories, name='fetch_categories'),
+    path('inventory/update_category',views.edit_category,name='edit_category'),
+    path('inventory/delete_category',views.delete_category,name='delete_category'),
+    path('inventory/new_category',views.add_category,name='new_category')
 ]

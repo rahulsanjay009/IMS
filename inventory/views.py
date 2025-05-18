@@ -13,9 +13,7 @@ from datetime import datetime
 from django.shortcuts import get_object_or_404
 from mailjet_rest import Client
 from django.views.decorators.csrf import csrf_exempt
-import cloudinary
 import os
-
 
 @api_view(['POST'])
 def add_category(request):
@@ -169,7 +167,6 @@ def get_categories(request):
 def add_order(request):
     try:
         data = json.loads(request.body)
-        print(data)
         customer_name = data.get("customer_name")
         customer_phone = data.get("customer_phone")
         customer_email = data.get("customer_email")
@@ -179,6 +176,9 @@ def add_order(request):
         products_data = data.get("products", [])
         is_returned = False
         comments = data.get("comments", None)
+        event_date=data.get("event_date",None)
+        is_delivery_required = data.get("is_delivery_required",None)
+        delivery_address = data.get("delivery_address",None)
 
         # Step 1: Check if customer exists by phone number
         customer, created = Customer.objects.get_or_create(
@@ -198,6 +198,7 @@ def add_order(request):
         try:
             date_from = datetime.strptime(from_date, "%Y-%m-%d %H:%M:%S")
             date_to = datetime.strptime(to_date, "%Y-%m-%d %H:%M:%S")
+            event_date = datetime.strptime(event_date,"%Y-%m-%d")
         except ValueError as e:
             return JsonResponse({"success": False, "error": f"Invalid date format: {str(e)}"}, status=200)
         
@@ -214,7 +215,10 @@ def add_order(request):
                 is_paid=is_paid,
                 customer=customer,
                 comments=comments,
-                is_returned=is_returned
+                is_returned=is_returned,
+                event_date = event_date,
+                is_delivery_required = is_delivery_required,
+                address = delivery_address
             )
             
             # Step 3: Create OrderItems for each product

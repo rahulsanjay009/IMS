@@ -40,5 +40,7 @@ urlpatterns = [
     path('inventory/fetch_categories',views.fetch_categories, name='fetch_categories'),
     path('inventory/update_category',views.edit_category,name='edit_category'),
     path('inventory/delete_category',views.delete_category,name='delete_category'),
-    path('inventory/new_category',views.add_category,name='new_category')
+    path('inventory/new_category',views.add_category,name='new_category'),
+    path('inventory/latest-products', views.latest_products, name='latest-products'),
+    path('inventory/filter_product_by_ids', views.get_products_by_ids, name='filter_product_by_id'),
 ]

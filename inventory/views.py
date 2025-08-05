@@ -1,19 +1,18 @@
-import cloudinary.uploader
-from .models import Product, Category, Customer, OrderItem , Order, RecentEvents
+from .models import Product, Category, Customer, OrderItem , Order, RecentEvents, ProductImage
 from django.db import IntegrityError, transaction
 from django.db.models import Sum, Q
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .helper import normalize, get_products_with_available_quantity, generate_order_number
+from .helper import normalize, get_products_with_available_quantity, generate_order_number, upload_image_to_s3, delete_image_from_s3
 import json
 from django.utils.html import  escape
 from datetime import datetime
 from django.shortcuts import get_object_or_404
 from mailjet_rest import Client
 from django.views.decorators.csrf import csrf_exempt
-import os
+from django.conf import settings
 
 @api_view(['POST'])
 def add_category(request):
@@ -21,16 +20,17 @@ def add_category(request):
         name = request.POST.get('name')
         image_file = request.FILES.get('image')
 
-        if not name or not image_file:
-            return JsonResponse({"success": False, "error": "Name and image are required"}, status=400)
-
-        # Upload image to Cloudinary
+        if not name:
+            return JsonResponse({"success": False, "error": "Name is required"}, status=200)
+        image_url=None
+        image_public_id=None
         if(image_file):
             try:
-                upload_result = cloudinary.uploader.upload(image_file)
-                image_url = upload_result.get('secure_url')
-                image_public_id = upload_result.get('public_id')
-            except e:
+                # upload_result = cloudinary.uploader.upload(image_file)
+                # image_url = upload_result.get('secure_url')
+                # image_public_id = upload_result.get('public_id')
+                image_url, image_public_id = upload_image_to_s3(image_file)
+            except Exception as e:
                 return JsonResponse({"success": False, "error": "Image not uploaded"}, status=200)
 
         # Save category with image details
@@ -53,86 +53,125 @@ def fetch_categories(request):
         return JsonResponse({'success': True, 'categories': list(categories)}, status=200)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
 @csrf_exempt
 @api_view(['POST'])
 @parser_classes([MultiPartParser, FormParser])
 def add_product(request):
-    print("Content-Type:", request.content_type)
-    print("Body:", request.body)
-
     try:
-        # Access fields from FormData (NOT request.body)
         name = request.data.get('name')
-        print(name)
         description = request.data.get('description')
         price = request.data.get('price')
         total_qty = request.data.get('total_qty')
-        category_text = request.data.get('category')
-        image_file = request.FILES.get('image')  # This works with FormData
-        
-        if not name:
-            return JsonResponse({"success": False, "message": "Product name is required."}, status=400)
+        raw_categories = request.data.get('categories')  # Expecting JSON array
+        image_files = request.FILES.getlist('images')  # Multiple files
+
+        if not name or not description or not price or not total_qty or not raw_categories:
+            return JsonResponse({"success": False, "message": "Missing required fields."}, status=200)
 
         if Product.objects.filter(name__iexact=name).exists():
-            return JsonResponse({"success": False, "message": "Product with this name already exists."}, status=409)
+            return JsonResponse({"success": False, "message": "Product with this name already exists."}, status=200)
 
-        category = Category.objects.filter(name__iexact=category_text).first()
+        try:
+            category_list = json.loads(raw_categories)
+        except Exception:
+            return JsonResponse({"success": False, "message": "Invalid categories format."}, status=200)
+
+        categories = []
+        for cat in category_list:
+            category = Category.objects.filter(id=cat.get('id')).first()
+            if category:
+                categories.append(category)
+
+        if not categories:
+            return JsonResponse({"success": False, "message": "No valid categories found."}, status=200)
 
         image_url = None
         image_public_id = None
+        product_images = []
 
-        if image_file:
+        for idx, img_file in enumerate(image_files):
             try:
-                cloudinary.config( 
-                    cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME"), 
-                    api_key = os.environ.get("CLOUDINARY_API_KEY"), 
-                    api_secret = os.environ.get("CLOUDINARY_API_SECRET"),
-                    secure = True
-                    )
-
-                upload_result = cloudinary.uploader.upload(image_file)
-                image_url = upload_result.get('secure_url')
-                image_public_id = upload_result.get('public_id')
+                uploaded_url, uploaded_public_id = upload_image_to_s3(img_file)
+                if idx == 0:
+                    image_url = uploaded_url
+                    image_public_id = uploaded_public_id
+                else:
+                    product_images.append((uploaded_url, uploaded_public_id))
             except Exception as e:
-                print(str(e))
                 return JsonResponse({"success": False, "message": str(e)}, status=200)
 
-        product = Product.objects.create(
+        product = Product(
             name=name,
             description=description,
             price=price,
             total_qty=total_qty,
-            category=category,
             image_url=image_url,
             image_public_id=image_public_id
         )
-    
-        return JsonResponse({
-            "success": True,
-            "message": "Product added successfully!"
-        }, status=201)
+        product.save()
+
+        product.categories.set(categories)
+
+        for url, public_id in product_images:
+            ProductImage.objects.create(product=product, image_url=url, image_public_id=public_id)
+
+        return JsonResponse({"success": True, "message": "Product added successfully!", "product": {
+            "id": product.id,
+            "name": product.name,
+            "price": product.price,
+            "total_qty": product.total_qty,
+            "description": product.description,
+            "image_url": product.image_url,
+            "image_public_id": product.image_public_id,
+            "categories": list(product.categories.values('id', 'name')),
+            "additional_images": list(product.images.values('image_url', 'image_public_id'))
+        }}, status=201)
 
     except Exception as e:
-        print(str(e))
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+
 
 @api_view(['GET'])
 def product_list(request):
     try:
-        category_type = request.GET.get('list','ALL')
-        if category_type == 'ALL':
+        category_type = request.GET.get('list', 'ALL').strip()
+
+        if category_type.upper() == 'ALL':
             products = Product.objects.all()
         else:
-            products = Product.objects.filter(category__name__iexact=category_type)
-        # Create a list of dictionaries with product data
-        product_data = normalize('products',products)
-        # Return the list of products as a JSON response
-        return JsonResponse({"success":True,'products': product_data}, status=200)
-    except Exception as e:
-        return JsonResponse({"success":False,'error':str(e)},status = 200)
-    
+            # Case-insensitive match for category name
+            products = Product.objects.filter(categories__name__iexact=category_type)
 
+        products = products.distinct()
+
+        product_data = normalize('products', products)
+
+        return JsonResponse({"success": True, 'products': product_data}, status=200)
+    except Exception as e:
+        return JsonResponse({"success": False, 'error': str(e)}, status=200)
+
+    
+@api_view(['POST'])
+def get_products_by_ids(request):
+    try:
+        product_ids = request.data.get('ids', [])
+
+        if not isinstance(product_ids, list):
+            return JsonResponse({"success": False, "error": "IDs should be a list"}, status=200)
+
+        products = Product.objects.filter(id__in=product_ids)
+
+        # You can serialize this if needed
+        product_data = normalize('products', products)
+
+        return JsonResponse({
+            "success": True,
+            "products": product_data
+        },status=200)
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+    
 @api_view(['POST'])
 def create_category(request):
     try:
@@ -386,7 +425,7 @@ def edit_category(request):
     try:
         category_id = request.data.get('id')
         new_name = request.data.get('name')
-        image = request.FILES.get('image')
+        image_file = request.FILES.get('image')
 
         category = Category.objects.get(id=category_id)
 
@@ -395,14 +434,12 @@ def edit_category(request):
             category.name = new_name
 
         # Handle image update
-        if image:
+        if image_file:
             # Delete old image from Cloudinary
             if category.image_public_id:
-                cloudinary.uploader.destroy(category.image_public_id)
+                delete_image_from_s3(category.image_public_id)
             
-            upload_result = cloudinary.uploader.upload(image)
-            category.image_url = upload_result.get('secure_url')
-            category.image_public_id = upload_result.get('public_id')
+            category.image_url,category.image_public_id = upload_image_to_s3(image_file)
 
         category.save()
         return JsonResponse({'success': True, 'message': 'Category updated successfully'}, status=200)
@@ -417,51 +454,118 @@ def edit_category(request):
 @parser_classes([MultiPartParser, FormParser])
 def edit_product(request):
     try:
-        product_id = request.data.get("id", None)
-        name = request.data.get('name', None)
-        description = request.data.get('description', None)
-        price = request.data.get('price', None)
-        total_qty = request.data.get('total_qty', None)
-        category_text = request.data.get('category', None)
-        image_file = request.FILES.get('image')
+        product_id = request.data.get("id")
+        name = request.data.get('name')
+        description = request.data.get('description')
+        price = request.data.get('price')
+        total_qty = request.data.get('total_qty')
 
-        if not product_id or not name or not price or total_qty is None or not category_text:
+        main_image_file = request.FILES.get('image')  # newly uploaded main image
+        main_image_public_id = request.data.get('image_public_id')  # existing main image public ID
+
+        new_additional_images = request.FILES.getlist('additional_images')  # new uploads
+        existing_additional_image_ids = request.data.getlist('existing_additional_images[]')  # keep these
+
+        raw_categories = request.data.get('categories')
+        raw_removed_images = request.data.get('removed_images')
+
+        # Parse categories
+        try:
+            category_list = json.loads(raw_categories) if raw_categories else []
+        except json.JSONDecodeError:
+            return JsonResponse({"success": False, "error": "Invalid categories format"}, status=400)
+
+        # Parse removed image IDs
+        try:
+            removed_image_public_ids = json.loads(raw_removed_images) if raw_removed_images else []
+        except json.JSONDecodeError:
+            removed_image_public_ids = []
+
+        # Required fields check
+        if not product_id or not name or not price or total_qty is None:
             return JsonResponse({"success": False, "error": "Missing required fields"}, status=400)
 
         product = get_object_or_404(Product, id=product_id)
-
         product.name = name
         product.description = description
         product.price = price
         product.total_qty = total_qty
 
-        try:
-            category = Category.objects.get(name__icontains=category_text)
-            product.category = category
-        except Category.DoesNotExist:
-            return JsonResponse({"success": False, "error": "Category not found"}, status=200)
-
-        # Handle image replacement
-        if image_file:
-            # Optional: delete old image from Cloudinary if needed
+        # 🌟 Main image logic
+        if main_image_file:
             if product.image_public_id:
                 try:
-                    cloudinary.uploader.destroy(product.image_public_id)
+                    print(f"Deleting old image: {product.image_public_id}")
+                    delete_image_from_s3(product.image_public_id)
                 except Exception as e:
-                    print(f"Cloudinary deletion error: {str(e)}")
-
-            # Upload new image
-            upload_result = cloudinary.uploader.upload(image_file)
-            product.image_url = upload_result.get('secure_url')
-            product.image_public_id = upload_result.get('public_id')
+                    print(f"S3 deletion error: {str(e)}")
+            product.image_url, product.image_public_id = upload_image_to_s3(main_image_file)
 
         product.save()
 
-        return JsonResponse({"success": True, "message": "Product updated successfully", 'image_url':product.image_url}, status=200)
+        # ✅ Update categories
+        category_ids = [c.get('id') for c in category_list if c.get('id')]
+        categories_qs = Category.objects.filter(id__in=category_ids)
+        product.categories.set(categories_qs)
+
+        # 🧹 Delete removed images (explicit only)
+        if removed_image_public_ids:
+            # Delete additional images
+            images_to_delete = ProductImage.objects.filter(product=product, image_public_id__in=removed_image_public_ids)
+            for img in images_to_delete:
+                try:
+                    delete_image_from_s3(img.image_public_id)
+                except Exception as e:
+                    print(f"S3 deletion error: {str(e)}")
+                img.delete()
+
+            # Check if main image is among removed images
+            if product.image_public_id in removed_image_public_ids:
+                try:
+                    delete_image_from_s3(product.image_public_id)
+                except Exception as e:
+                    print(f"S3 deletion error (main image): {str(e)}")
+                product.image_public_id = None
+                product.image_url = ''
+                product.save()
+
+
+        # 🔄 Sync additional images — only if list provided
+        if 'existing_additional_images[]' in request.data:
+            ProductImage.objects.filter(
+                product=product
+            ).exclude(
+                image_public_id__in=existing_additional_image_ids
+            ).delete()
+
+        # ➕ Add new additional images
+        for img in new_additional_images:
+            img_url, img_public_id = upload_image_to_s3(img)
+            ProductImage.objects.create(
+                product=product,
+                image_url=img_url,
+                image_public_id=img_public_id
+            )
+
+        return JsonResponse({
+        "success": True,
+        "message": "Product updated successfully",
+        "product": {
+            "id": product.id,
+            "name": product.name,
+            "price": product.price,
+            "total_qty": product.total_qty,
+            "description": product.description,
+            "image_url": product.image_url,
+            "image_public_id": product.image_public_id,
+            "categories": list(product.categories.values('id', 'name')),
+            "additional_images": list(product.images.values('image_url', 'image_public_id'))
+        }
+        }, status=200)
 
     except Exception as e:
+        print("Error editing product:", str(e))
         return JsonResponse({"success": False, "error": str(e)}, status=500)
-    
 
 
 @api_view(['POST'])
@@ -476,8 +580,8 @@ def delete_category(request):
         category = Category.objects.get(id=category_id)
 
         # Delete Cloudinary image
-        if category.image_public_id:
-            cloudinary.uploader.destroy(category.image_public_id)
+        if category.image_public_id:                          
+            delete_image_from_s3(category.image_public_id)
 
         category.delete()
         return JsonResponse({'success': True, 'message': 'Category deleted successfully'}, status=200)
@@ -487,37 +591,43 @@ def delete_category(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-
 @api_view(['POST'])
 def delete_product(request):
     try:
-        # Parse the incoming request data
         data = json.loads(request.body)
-        product_id = data.get("product_id", None)
-        
-        # Ensure the product_id is provided
+        product_id = data.get("product_id")
+
         if not product_id:
             return JsonResponse({"success": False, "error": "Product ID is required"}, status=400)
-        
-        # Fetch the product
+
         product = get_object_or_404(Product, id=product_id)
-        
-        # If the product has an image, delete it from Cloudinary
+
+        # Delete all additional images (ProductImage)
+        for image in product.images.all():
+            if image.image_public_id:
+                try:
+                    delete_image_from_s3(image.image_public_id)
+                except Exception as e:
+                    return JsonResponse({
+                        "success": False,
+                        "error": f"Error deleting image '{image.image_public_id}' from S3: {str(e)}"
+                    }, status=500)
+
+        # Delete main product image
         if product.image_public_id:
             try:
-                # Perform the Cloudinary deletion using the public_id
-                destroy_result = cloudinary.uploader.destroy(public_id=product.image_public_id)
-                # Check if the delete was successful
-                if destroy_result.get('result') != 'ok':
-                    return JsonResponse({"success": False, "error": "Failed to delete image from Cloudinary"}, status=500)
+                delete_image_from_s3(product.image_public_id)
             except Exception as e:
-                return JsonResponse({"success": False, "error": f"Error deleting image from Cloudinary: {str(e)}"}, status=500)
-        
-        # Now delete the product from the database
+                return JsonResponse({
+                    "success": False,
+                    "error": f"Error deleting main image from S3: {str(e)}"
+                }, status=500)
+
+        # Finally, delete the product and all related ProductImage records
         product.delete()
-        
-        return JsonResponse({"success": True, "message": "Product and image deleted successfully"}, status=200)
-    
+
+        return JsonResponse({"success": True, "message": "Product and all images deleted successfully"}, status=200)
+
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
@@ -569,7 +679,7 @@ def send_order_confirmation(request):
     from_email = 'rahul.sanjay009@gmail.com'
 
     try:
-        mailjet = Client(auth=(os.getenv('API_KEY'),os.getenv('SECRET_API_KEY')))
+        mailjet = Client(auth=(settings.API_KEY,settings.SECRET_API_KEY))
         data = {
             'FromEmail':from_email,
             'FromName':'Rahul',
@@ -631,9 +741,8 @@ def create_recent_event(request):
             
             if 'image' in request.FILES:
                 try:
-                    upload_result = cloudinary.uploader.upload(request.FILES['image'])
-                    image_url = upload_result.get('secure_url')
-                    image_public_id = upload_result.get('public_id')
+                    image_file = request.FILES['image']
+                    image_url, image_public_id = upload_image_to_s3(image_file)
                 except e:
                     return JsonResponse({'success':False,'error': 'Image not able to upload'}, status=200)
             
@@ -669,12 +778,14 @@ def update_recent_event(request):
             if 'image' in request.FILES:
                 if event.image_public_id:
                     try:
-                        cloudinary.uploader.destroy(event.image_public_id)
+                        delete_image_from_s3(event.image_public_id)
                     except e:
                         return JsonResponse({'success':False,'error': 'Existing image not able to deleted'}, status=200)
-                upload_result = cloudinary.uploader.upload(request.FILES['image'])
-                event.image_url = upload_result.get('secure_url')
-                event.image_public_id = upload_result.get('public_id')
+                image_file = request.FILES['image']
+                
+                event.image_url, event.image_public_id = upload_image_to_s3(image_file)
+                # event.image_url = upload_result.get('secure_url')
+                # event.image_public_id = upload_result.get('public_id')
 
             event.save()
             return JsonResponse({'success': True, 'event': {
@@ -701,7 +812,7 @@ def delete_recent_event(request):
             event = RecentEvents.objects.get(id=event_id)
             
             if event.image_public_id:
-                cloudinary.uploader.destroy(event.image_public_id)
+                delete_image_from_s3(event.image_public_id)
             
             event.delete()
             return JsonResponse({'success': True, 'message':'Event Deleted Succesfully'})
@@ -725,3 +836,25 @@ def recent_events(request):
         "image_public_id": event.image_public_id
     } for event in events]
     return JsonResponse({"success": True, "events": event_list})
+
+@api_view(['GET'])
+def latest_products(request):
+    try:
+        products = Product.objects.order_by('-created_at')[:10]
+        
+        product_data = [
+            {
+                "id": str(product.id),
+                "name": product.name,
+                "description": product.description,
+                "price": float(product.price),
+                "total_qty": product.total_qty,
+                "category": product.category.name if product.category else None,
+                "image_url": product.image_url,
+            }
+            for product in products
+        ]
+
+        return JsonResponse({'success':True,'message':'Products fetched Succesfully','products':product_data},status =200)
+    except Exception as e:
+        return JsonResponse({'success':False,'error':f'Fetch error latest products {str(e)}'},status =500)

@@ -13,17 +13,29 @@ class Category(models.Model):
         ]
     def __str__(self):
         return self.name
-    
+
+class ProductImage(models.Model):
+        product = models.ForeignKey('Product', related_name='images', on_delete=models.CASCADE)
+        image_url = models.URLField(null=True, blank=True)
+        image_public_id = models.CharField(max_length=255, blank=True, null=True)
+
+        def __str__(self):
+            return f'{self.product.name} - {self.image_public_id}'
+        
 class Product(models.Model):
     id = models.UUIDField(primary_key = True, default = uuid.uuid4, editable = False)
     name = models.CharField(max_length = 255, unique=True)
     description = models.TextField()
     price = models.DecimalField(max_digits = 5 , decimal_places = 2)
     total_qty = models.IntegerField()
-    category = models.ForeignKey(Category, on_delete = models.SET_NULL, null = True, blank = True)
+    # category = models.ForeignKey(Category, on_delete = models.SET_NULL, null = True, blank = True)
+    categories = models.ManyToManyField(Category, related_name='products', blank=True)
     image_url = models.URLField(null = True, blank = True)
     image_public_id = models.CharField(max_length=255, blank=True, null=True)
-
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs) 
 
     def __str__(self):
         return self.name
@@ -41,14 +53,14 @@ class Customer(models.Model):
 class Order(models.Model):
     number = models.DecimalField(max_digits=65, decimal_places=0, editable=False)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    date_from = models.DateTimeField()
-    date_to = models.DateTimeField()
-    is_paid = models.BooleanField()
-    comments = models.TextField()
+    date_from = models.DateTimeField(null=True)
+    date_to = models.DateTimeField(null=True)
+    is_paid = models.BooleanField(null=True)
+    comments = models.TextField(null=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
-    is_returned = models.BooleanField()
-    is_delivery_required = models.BooleanField()
-    event_date = models.DateField()
+    is_returned = models.BooleanField(null=True)
+    is_delivery_required = models.BooleanField(null=True)
+    event_date = models.DateField(null=True)
     address = models.TextField(null=True, blank=True)
 
     def __str__(self):

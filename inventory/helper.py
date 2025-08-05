@@ -2,6 +2,12 @@ from .models import Order, OrderItem, Product
 from django.db.models import Sum
 import hashlib
 import time
+from boto3.session import Session
+import boto3
+from django.conf import settings
+import uuid
+from PIL import Image
+import io
 
 def get_orders_by_type(data, current_orders):
     result_data = []    
@@ -35,17 +41,20 @@ def get_orders_by_type(data, current_orders):
 
 def normalize(type,data,orders_type = 1):
     result_data = []
-    if(type == 'products'):        
+    if type == 'products':        
         for product in data:
-                result_data.append({
-                    'id': str(product.id),  # Convert UUID to string to ensure it's serializable
-                    'name': product.name,
-                    'description': product.description,
-                    'price': str(product.price),  # Convert Decimal to string to avoid issues
-                    'total_qty': product.total_qty,
-                    'image_url':product.image_url,
-                    'category': product.category.name if product.category else 'No category',  # Handle missing category
-                })
+            result_data.append({
+                'id': str(product.id),  # Convert UUID to string to ensure it's serializable
+                'name': product.name,
+                'description': product.description,
+                'price': str(product.price),  # Convert Decimal to string to avoid issues
+                'total_qty': product.total_qty,
+                'image_url': product.image_url,
+                'image_public_id': product.image_public_id,
+                'created_at': product.created_at,
+                'categories': [{'name':category.name, 'id':category.id} for category in product.categories.all()] or ['No category'],  # M2M field
+                'additional_images' : [{'image_url': image.image_url, 'image_public_id': image.image_public_id} for image in product.images.all()]
+            })
     elif type == 'categories':
          for category in data:
               result_data.append(category.name)
@@ -98,3 +107,97 @@ def generate_order_number(phone, name):
     order_number = hash_int % 10_000_000_000
     return str(order_number).zfill(10)  # Pad with leading zeros if needed
 
+def compress_image(image_file, target_size_kb=200, force_jpeg_if_large=True):
+    image = Image.open(image_file)
+    original_format = image.format or 'PNG'
+    is_transparent = image.mode in ('RGBA', 'LA') or (
+        image.mode == 'P' and 'transparency' in image.info
+    )
+
+    # Rewind to calculate original size
+    image_file.seek(0)
+    image_file.seek(0)
+
+    if force_jpeg_if_large and (original_format == 'PNG' and not is_transparent):
+        image = image.convert('RGB')
+        output_format = 'JPEG'
+    elif force_jpeg_if_large and is_transparent:
+        background = Image.new("RGB", image.size, (255, 255, 255))
+        image = image.convert("RGBA")
+        background.paste(image, mask=image.split()[3])
+        image = background
+        output_format = 'JPEG'
+    else:
+        output_format = original_format
+
+    buffer = io.BytesIO()
+    quality = 85 if output_format == 'JPEG' else None
+    min_quality = 30
+
+    while True:
+        buffer.seek(0)
+        buffer.truncate()
+
+        if output_format == 'JPEG':
+            image.save(buffer, format='JPEG', quality=quality, optimize=True)
+        elif output_format == 'PNG':
+            image.save(buffer, format='PNG', optimize=True, compress_level=9)
+
+        size_kb = buffer.tell() / 1024
+        if size_kb <= target_size_kb or (quality is not None and quality <= min_quality):
+            break
+
+        if output_format == 'JPEG':
+            quality -= 5
+
+    buffer.seek(0)
+    return buffer, output_format
+
+
+
+def upload_image_to_s3(image_file, force_jpeg=False):
+    compressed_buffer, fmt = compress_image(image_file)
+
+    # Fix content type if format changed (e.g. PNG converted to JPEG)
+    if force_jpeg or (image_file.content_type == 'image/png' and fmt == 'JPEG'):
+        content_type = 'image/jpeg'
+    else:
+        content_type = image_file.content_type
+
+    key = f'images/{uuid.uuid4().hex}_{image_file.name}'
+
+    session = Session(
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.AWS_S3_REGION_NAME
+    )
+    s3_client = session.client('s3')
+
+    s3_client.upload_fileobj(
+        Fileobj=compressed_buffer,
+        Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+        Key=key,
+        ExtraArgs={
+            'ContentType': content_type,
+            'CacheControl': 'public, max-age=31536000, immutable'
+        }
+    )
+
+    image_url = f'https://{settings.AWS_S3_CUSTOM_DOMAIN}/{key}'
+    return image_url, key
+
+
+def delete_image_from_s3(key):
+    try:
+        boto3_s3 = boto3.client(
+                    's3',
+                    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                    region_name=settings.AWS_S3_REGION_NAME
+                ) 
+        boto3_s3.delete_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=key)
+        return True
+    except Exception as e:
+        # You may log this error instead of failing the entire request
+        print(f"Failed to delete image from S3: {e}")
+        return False

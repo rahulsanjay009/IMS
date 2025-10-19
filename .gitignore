@@ -1,1 +1,15 @@
+# Environment variables
 .env
+
+# SQLite database
+db.sqlite3
+
+# Python bytecode
+**/__pycache__/
+
+# Ignore migration files but keep __init__.py
+inventory/migrations/*
+!inventory/migrations/__init__.py
+
+# Zip files
+*.zip

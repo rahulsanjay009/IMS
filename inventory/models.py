@@ -11,6 +11,14 @@ class Category(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['name'], name='unique_category_name', condition=models.Q(name__iexact=models.F('name')))
         ]
+    s_no = models.IntegerField(unique=True, editable=True, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        # Auto-assign next number only if not manually provided
+        if not self.s_no:
+            last = Category.objects.order_by('-s_no').first()
+            self.s_no = 1 if not last else last.s_no + 1
+        super().save(*args, **kwargs)
     def __str__(self):
         return self.name
 
@@ -33,8 +41,13 @@ class Product(models.Model):
     image_url = models.URLField(null = True, blank = True)
     image_public_id = models.CharField(max_length=255, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+    s_no = models.IntegerField(unique=True, editable=True, blank=True, null=True)
+
     def save(self, *args, **kwargs):
+        # Auto-assign next number only if not manually provided
+        if not self.s_no:
+            last = Product.objects.order_by('-s_no').first()
+            self.s_no = 1 if not last else last.s_no + 1
         super().save(*args, **kwargs) 
 
     def __str__(self):

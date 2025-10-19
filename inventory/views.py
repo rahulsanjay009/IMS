@@ -5,7 +5,8 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .helper import normalize, get_products_with_available_quantity, generate_order_number, upload_image_to_s3, delete_image_from_s3
+from .helper import normalize, get_products_with_available_quantity, generate_order_number, upload_image_to_s3, delete_image_from_s3, get_sqs_client
+
 import json
 from django.utils.html import  escape
 from datetime import datetime
@@ -13,6 +14,8 @@ from django.shortcuts import get_object_or_404
 from mailjet_rest import Client
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django.http import HttpResponse
+from urllib.parse import unquote_plus, quote_plus
 
 @api_view(['POST'])
 def add_category(request):
@@ -49,7 +52,7 @@ def add_category(request):
 @api_view(['GET'])
 def fetch_categories(request):
     try:
-        categories = Category.objects.all().values('id', 'name', 'image_url', 'image_public_id')
+        categories = Category.objects.all().values('id', 'name', 'image_url', 'image_public_id','s_no').order_by('s_no')
         return JsonResponse({'success': True, 'categories': list(categories)}, status=200)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -137,10 +140,10 @@ def product_list(request):
         category_type = request.GET.get('list', 'ALL').strip()
 
         if category_type.upper() == 'ALL':
-            products = Product.objects.all()
+            products = Product.objects.all().order_by('s_no')
         else:
             # Case-insensitive match for category name
-            products = Product.objects.filter(categories__name__iexact=category_type)
+            products = Product.objects.filter(categories__name__iexact=category_type).order_by('s_no')
 
         products = products.distinct()
 
@@ -195,7 +198,7 @@ def create_category(request):
 @api_view(['GET']) 
 def get_categories(request):
     try:
-        result_set = Category.objects.all()
+        result_set = Category.objects.all().order_by('s_no')
         categories = normalize('categories',result_set)
         return JsonResponse({"success":True,"categories":categories},status = 200)
     except Exception as e:
@@ -426,6 +429,7 @@ def edit_category(request):
         category_id = request.data.get('id')
         new_name = request.data.get('name')
         image_file = request.FILES.get('image')
+        s_no = request.data.get('s_no', None)
 
         category = Category.objects.get(id=category_id)
 
@@ -440,13 +444,44 @@ def edit_category(request):
                 delete_image_from_s3(category.image_public_id)
             
             category.image_url,category.image_public_id = upload_image_to_s3(image_file)
+        # Handle s_no update and potential swap
+        swapped_category_id = None
+        if s_no is not None and s_no != category.s_no:
+            existing = Category.objects.filter(s_no=s_no).exclude(id=category.id).first()
+            if existing:
+                # Step 1: assign a temp value to existing to free up the desired s_no
+                swapped_category_id= existing.id
+                temp_s_no = -1  # must be a value that never exists
+                existing.s_no = temp_s_no
+                existing.save()
 
+                temp_s_no = category.s_no
+                # Step 2: assign desired s_no to category
+                category.s_no = s_no
+                category.save()
+
+                # Step 3: assign original category.s_no to existing
+                existing.s_no = temp_s_no
+                existing.save()
+            else:
+                category.s_no = s_no
         category.save()
-        return JsonResponse({'success': True, 'message': 'Category updated successfully'}, status=200)
+        return JsonResponse({'success': True, 
+                             'category': {
+                                 'id': category.id,
+                                 'name': category.name,
+                                 'image_url': category.image_url,
+                                 'image_public_id': category.image_public_id,
+                                 's_no': category.s_no
+                             },
+                             'swapped_with': {"category_id":swapped_category_id, "s_no":s_no} if swapped_category_id else None,
+                             'message': 'Category updated successfully'}, status=200)
 
     except Category.DoesNotExist:
+        print("Error editing category: Category not found")
         return JsonResponse({'success': False, 'error': 'Category not found'}, status=404)
     except Exception as e:
+        print("Error editing category:", str(e))
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
     
 @csrf_exempt
@@ -459,6 +494,7 @@ def edit_product(request):
         description = request.data.get('description')
         price = request.data.get('price')
         total_qty = request.data.get('total_qty')
+        s_no = request.data.get('s_no', None)
 
         main_image_file = request.FILES.get('image')  # newly uploaded main image
         main_image_public_id = request.data.get('image_public_id')  # existing main image public ID
@@ -490,7 +526,6 @@ def edit_product(request):
         product.description = description
         product.price = price
         product.total_qty = total_qty
-
         # 🌟 Main image logic
         if main_image_file:
             if product.image_public_id:
@@ -500,6 +535,28 @@ def edit_product(request):
                 except Exception as e:
                     print(f"S3 deletion error: {str(e)}")
             product.image_url, product.image_public_id = upload_image_to_s3(main_image_file)
+
+        swapped_product_id = None
+        swapped_product_sno = product.s_no
+        if s_no is not None and s_no != product.s_no:
+            existing = Product.objects.filter(s_no=s_no).exclude(id=product.id).first()
+            if existing:
+                # Step 1: assign a temp value to existing to free up the desired s_no
+                swapped_product_id = existing.id
+                temp_s_no = -1  # must be a value that never exists
+                existing.s_no = temp_s_no
+                existing.save()
+
+                temp_s_no = product.s_no
+                # Step 2: assign desired s_no to product
+                product.s_no = s_no
+                product.save()
+
+                # Step 3: assign original product.s_no to existing
+                existing.s_no = temp_s_no
+                existing.save()
+            else:
+                product.s_no = s_no
 
         product.save()
 
@@ -559,8 +616,10 @@ def edit_product(request):
             "image_url": product.image_url,
             "image_public_id": product.image_public_id,
             "categories": list(product.categories.values('id', 'name')),
-            "additional_images": list(product.images.values('image_url', 'image_public_id'))
-        }
+            "additional_images": list(product.images.values('image_url', 'image_public_id')),
+            "s_no": product.s_no
+        },
+        "swapped_with": {"product_id":swapped_product_id, "s_no":swapped_product_sno} if swapped_product_id else None
         }, status=200)
 
     except Exception as e:
@@ -858,3 +917,58 @@ def latest_products(request):
         return JsonResponse({'success':True,'message':'Products fetched Succesfully','products':product_data},status =200)
     except Exception as e:
         return JsonResponse({'success':False,'error':f'Fetch error latest products {str(e)}'},status =500)
+    
+
+@csrf_exempt # Only for development, handle CSRF properly in production
+def send_sqs_message(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            message_body = data.get('order_details')
+
+            if not message_body:
+                return JsonResponse({'error': 'Message body is required'}, status=400)
+
+            sqs = get_sqs_client()
+            queue_url = 'https://sqs.us-east-2.amazonaws.com/878126142668/Srikrishnapartyrentalsllc-order-notifications' 
+
+            message_body_str = json.dumps(message_body) 
+            response = sqs.send_message(
+                QueueUrl=queue_url,
+                MessageBody=message_body_str
+            )
+            return JsonResponse({'success':True,'messageId': response['MessageId']}, status=200)
+        except json.JSONDecodeError:
+            return JsonResponse({'success':False,'error': 'Invalid JSON'}, status=400)
+        except Exception as e:
+            print(e)
+            return JsonResponse({'success':False,'error': str(e)}, status=500)
+    return JsonResponse({'success':False,'error': 'Only POST requests are allowed'}, status=405)
+
+def send_sms_view(request):
+    encoded_message = request.GET.get('message', '')
+    phoneNumber = request.GET.get('phoneNumber', '')
+    message = unquote_plus(encoded_message)
+
+    # URL-encode message again for embedding in href
+    href_message = quote_plus(message)
+
+    sms_href = f"sms:{phoneNumber}?body={href_message}"
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Send SMS</title>
+    </head>
+    <body>
+        <h2>Send Text Message</h2>
+        <p>
+            Click the link below to open your SMS app with the pre-filled message:<br/><br/>
+            <a href="{sms_href}">contact via iMessage</a>
+        </p>
+    </body>
+    </html>
+    """
+
+    return HttpResponse(html_content)

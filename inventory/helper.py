@@ -53,11 +53,12 @@ def normalize(type,data,orders_type = 1):
                 'image_public_id': product.image_public_id,
                 'created_at': product.created_at,
                 'categories': [{'name':category.name, 'id':category.id} for category in product.categories.all()] or ['No category'],  # M2M field
-                'additional_images' : [{'image_url': image.image_url, 'image_public_id': image.image_public_id} for image in product.images.all()]
+                'additional_images' : [{'image_url': image.image_url, 'image_public_id': image.image_public_id} for image in product.images.all()],
+                's_no': product.s_no
             })
     elif type == 'categories':
          for category in data:
-              result_data.append(category.name)
+              result_data.append({"name":category.name, "s_no":category.s_no})
     elif type == 'orders':    
         if int(orders_type) == 1:
             result_data = get_orders_by_type(data, False)
@@ -201,3 +202,12 @@ def delete_image_from_s3(key):
         # You may log this error instead of failing the entire request
         print(f"Failed to delete image from S3: {e}")
         return False
+    
+def get_sqs_client():
+    try:
+        sqs = boto3.client('sqs', region_name=settings.AWS_S3_REGION_NAME)
+        return sqs
+    except Exception as e:
+        # In a real-world app, you might want more robust logging here
+        print(f"Error initializing SQS client: {e}") 
+        return None

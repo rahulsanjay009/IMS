@@ -43,4 +43,6 @@ urlpatterns = [
     path('inventory/new_category',views.add_category,name='new_category'),
     path('inventory/latest-products', views.latest_products, name='latest-products'),
     path('inventory/filter_product_by_ids', views.get_products_by_ids, name='filter_product_by_id'),
+    path('inventory/sqs_message', views.send_sqs_message, name='sqs_message'),  # New endpoint for SQS message
+    path('inventory/send-sms', views.send_sms_view, name='send_sms'),  # New endpoint for sending SMS
 ]
